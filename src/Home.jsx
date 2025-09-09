@@ -1,22 +1,130 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { auth } from './firebase';
+import { signOut } from 'firebase/auth';
 
 export default function Home({ user }) {
+  const navigate = useNavigate();
+
+  async function handleLogout() {
+    await signOut(auth);
+    navigate('/auth', { replace: true });
+  }
   return (
     <div className="home">
-      <div className="hero">
-        <h1>Welcome to TalkBuddy 🗣️</h1>
-        <p>Practice speaking, learn faster, and build confidence.</p>
-        {user ? (
-          <Link className="primary" to="/dashboard">Open Dashboard</Link>
-        ) : (
-          <Link className="primary" to="/auth">Get Started</Link>
-        )}
-      </div>
-      <div className="features">
-        <div className="feature">Live conversation practice</div>
-        <div className="feature">Personalized lessons</div>
-        <div className="feature">Instant feedback</div>
-      </div>
+      <header className="topnav">
+        <div className="logo"> 
+          <div className="logo-mark">TB</div>
+          <span className="logo-text">TalkBuddy AI</span>
+        </div>
+        <nav className="menu">
+          <Link to="/">Home</Link>
+          <a href="#features">Features</a>
+          <a href="#progress">Progress</a>
+          <a href="#profile">Profile</a>
+          <a href="#settings">Settings</a>
+          {user ? (
+            <button className="logout" onClick={handleLogout}>Logout</button>
+          ) : (
+            <Link to="/auth" className="logout">Login</Link>
+          )}
+        </nav>
+      </header>
+
+      <section className="hero">
+        <div className="hero-bg" />
+        <div className="hero-content">
+          <div className="welcome-badge">
+            <span className="badge-icon">✨</span>
+            <span>Welcome back!</span>
+          </div>
+          <h1>Hi {user?.displayName || (user?.email ? user.email.split('@')[0] : 'there')} 👋</h1>
+          <p className="hero-subtitle">Ready to practice your English today? Your AI coach is waiting!</p>
+          <div className="cta-group">
+            <button className="cta voice">
+              <span className="cta-icon">🎙️</span>
+              <div>
+                <div className="cta-title">Voice Practice</div>
+                <div className="cta-subtitle">Start speaking now</div>
+              </div>
+            </button>
+            <button className="cta video">
+              <span className="cta-icon">🎥</span>
+              <div>
+                <div className="cta-title">Video Call</div>
+                <div className="cta-subtitle">Face-to-face practice</div>
+              </div>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="insights" aria-labelledby="daily-insights">
+        <h2 id="daily-insights">Daily Insights</h2>
+        <div className="insight-grid">
+          <article className="card stat">
+            <div className="stat-icon">📈</div>
+            <div>
+              <div className="stat-label">Confidence Score</div>
+              <div className="stat-value">82%</div>
+            </div>
+          </article>
+          <article className="card stat">
+            <div className="stat-icon">😊</div>
+            <div>
+              <div className="stat-label">Mood Trend</div>
+              <div className="stat-value">Steady ↗</div>
+            </div>
+          </article>
+          <article className="card stat">
+            <div className="stat-icon">🕒</div>
+            <div>
+              <div className="stat-label">Last Session</div>
+              <div className="stat-value">12 min, Clarity +6%</div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="features" className="activities" aria-labelledby="recommended-activities">
+        <h2 id="recommended-activities">Recommended Activities</h2>
+        <div className="activity-grid">
+          <button className="card activity">⚡ Quick 2‑min warmup</button>
+          <button className="card activity">💪 Confidence booster</button>
+          <button className="card activity">🗣️ Debate practice</button>
+          <button className="card activity">🧘 Breathing & pace</button>
+        </div>
+      </section>
+
+      <section id="progress" className="progress" aria-labelledby="progress-overview">
+        <h2 id="progress-overview">Progress Overview</h2>
+        <div className="card chart">
+          <div className="chart-placeholder">
+            <span>Chart placeholder</span>
+          </div>
+          <div className="chart-legend">
+            <span>Confidence %</span>
+            <span>Speech clarity</span>
+            <span>Emotion stability</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="motivation" aria-labelledby="motivation">
+        <h2 id="motivation">Tip of the Day</h2>
+        <blockquote className="card quote">
+          "Small, consistent practice beats occasional perfection. Show up today."
+        </blockquote>
+      </section>
+
+      <footer className="footer">
+        <div className="footer-links">
+          <a href="#about">About</a>
+          <a href="#support">Support</a>
+          <a href="#privacy">Privacy Policy</a>
+          <a href="#contact">Contact Us</a>
+        </div>
+        <div className="copy">© {new Date().getFullYear()} TalkBuddy AI</div>
+      </footer>
     </div>
   );
 }

@@ -25,10 +25,10 @@ function App() {
   return (
     <>
       <Routes>
-        <Route path="/" element={<Home user={user} />} />
+        <Route path="/" element={user && !user.emailVerified ? <Navigate to="/verify-email" replace /> : <Home user={user} />} />
         <Route
           path="/auth"
-          element={user ? <Navigate to={user.emailVerified ? '/dashboard' : '/verify-email'} replace /> : <AuthForm />}
+          element={user ? <Navigate to='/' replace /> : <AuthForm />}
         />
         <Route
           path="/dashboard"
@@ -36,11 +36,7 @@ function App() {
         />
         <Route
           path="/verify-email"
-          element={user && !user.emailVerified ? (
-            <VerifyEmailView user={user} />
-          ) : (
-            <Navigate to={user ? '/dashboard' : '/auth'} replace />
-          )}
+          element={user ? (user.emailVerified ? <Navigate to='/' replace /> : <VerifyEmailView user={user} />) : <Navigate to='/auth' replace />}
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

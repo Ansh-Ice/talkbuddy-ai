@@ -1,5 +1,5 @@
 // src/AuthForm.jsx
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "./firebase";
 import {
@@ -10,6 +10,7 @@ import {
   signOut,
   sendPasswordResetEmail,
   sendEmailVerification,
+  updateProfile,
 } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 
@@ -17,35 +18,111 @@ const AuthForm = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isRegister, setIsRegister] = useState(false);
+  const [name, setName] = useState("");
+  const [goal, setGoal] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const [errorDialog, setErrorDialog] = useState({ open: false, title: "", message: "", code: "" });
   const navigate = useNavigate();
+
+  function extractAuthCode(err) {
+    if (err && typeof err.code === 'string' && err.code) return err.code;
+    const msg = typeof err?.message === 'string' ? err.message : '';
+    // Firebase often embeds code in message like: "Firebase: Error (auth/email-already-in-use)."
+    const m = msg.match(/\((auth\/[\w-]+)\)/i);
+    if (m && m[1]) return m[1];
+    return 'unknown';
+  }
+
+  function formatFirebaseError(err) {
+    const code = extractAuthCode(err);
+    switch (code) {
+      case "auth/email-already-in-use":
+        return { title: "Email already in use", message: "An account with this email already exists. Try logging in instead.", code };
+      case "auth/invalid-email":
+        return { title: "Invalid email", message: "Please enter a valid email address.", code };
+      case "auth/weak-password":
+        return { title: "Weak password", message: "Password must be at least 6 characters.", code };
+      case "auth/wrong-password":
+        return { title: "Incorrect password", message: "The password you entered is incorrect.", code };
+      case "auth/user-not-found":
+        return { title: "Account not found", message: "No account exists with this email. Please register first.", code };
+      case "auth/account-exists-with-different-credential":
+        return { title: "Use different sign-in method", message: "This email is linked to another provider. Try a different method or reset your password.", code };
+      case "auth/too-many-requests":
+        return { title: "Too many attempts", message: "Access to this account has been temporarily disabled due to many failed attempts. Try again later.", code };
+      case "auth/popup-closed-by-user":
+        return { title: "Google sign-in cancelled", message: "The sign-in popup was closed before completing. Please try again.", code };
+      case "auth/popup-blocked":
+        return { title: "Popup blocked", message: "Your browser blocked the sign-in popup. Allow popups and try again.", code };
+      case "auth/operation-not-allowed":
+        return { title: "Sign-in not allowed", message: "This sign-in method is disabled. Please contact support.", code };
+      case "auth/user-disabled":
+        return { title: "Account disabled", message: "This account has been disabled. Contact support for help.", code };
+      case "auth/network-request-failed":
+        return { title: "Network error", message: "We couldn't reach the server. Check your internet connection and try again.", code };
+      case "auth/invalid-credential":
+        return { title: "Invalid credentials", message: "Your credentials are invalid or expired. Please try again.", code };
+      case "auth/account-not-registered":
+        return { title: "Account not registered", message: "This Google account isn't registered here. Please sign up with email/password first.", code };
+      default:
+        return { title: "Something went wrong", message: err?.message || "Please try again.", code };
+    }
+  }
+
+  function showError(err) {
+    const { title, message, code } = formatFirebaseError(err);
+    setErrorDialog({ open: true, title, message, code });
+  }
+
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === "Escape") setErrorDialog((s) => ({ ...s, open: false }));
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   async function handleAuth(e) {
     e.preventDefault();
     setIsSubmitting(true);
-    setError("");
+    setErrorDialog((s) => ({ ...s, open: false }));
     try {
       if (isRegister) {
+        if (!name.trim()) {
+          setError("Please enter your name.");
+          setIsSubmitting(false);
+          return;
+        }
         const cred = await createUserWithEmailAndPassword(auth, email, password);
-        // Save email into registration registry (keyed by normalized email)
+        // Set display name in Firebase Auth
+        await updateProfile(cred.user, { displayName: name.trim() });
+        // Save registration registry (keyed by normalized email)
         const emailKey = (cred.user.email || "").trim().toLowerCase();
         await setDoc(doc(db, "registeredEmails", emailKey), {
           email: cred.user.email,
+          createdAt: Date.now(),
+        });
+        // Save user profile document
+        await setDoc(doc(db, "users", cred.user.uid), {
+          uid: cred.user.uid,
+          email: cred.user.email,
+          name: name.trim(),
+          goal: goal.trim(),
           createdAt: Date.now(),
         });
         await sendEmailVerification(cred.user);
         navigate("/verify-email", { replace: true });
       } else {
         const cred = await signInWithEmailAndPassword(auth, email, password);
+        // Do NOT send verification on login. If not verified, require verification first.
         if (cred.user.emailVerified) {
-          navigate("/dashboard", { replace: true });
+          navigate("/", { replace: true });
         } else {
           navigate("/verify-email", { replace: true });
         }
       }
     } catch (err) {
-      setError(err.message);
+      showError(err);
     } finally {
       setIsSubmitting(false);
     }
@@ -54,24 +131,25 @@ const AuthForm = () => {
   async function handleGoogleAuth() {
     const provider = new GoogleAuthProvider();
     setIsSubmitting(true);
-    setError("");
+    setErrorDialog((s) => ({ ...s, open: false }));
     try {
       const cred = await signInWithPopup(auth, provider);
       // Enforce: only allow Google sign-in if email was registered via our flow
       const email = (cred.user.email || "").trim().toLowerCase();
       const regDoc = await getDoc(doc(db, "registeredEmails", email));
       if (!regDoc.exists()) {
-        // Not allowed: sign the user out and show error
+        // Not allowed: sign the user out and show error with specific code
         await signOut(auth);
-        throw new Error("This Google account is not registered. Please sign up first with email/password.");
+        throw { code: 'auth/account-not-registered', message: 'This Google account is not registered. Please sign up first with email/password.' };
       }
+      // Do NOT send verification on login. If not verified, require verification first.
       if (cred.user.emailVerified) {
-        navigate("/dashboard", { replace: true });
+        navigate("/", { replace: true });
       } else {
         navigate("/verify-email", { replace: true });
       }
     } catch (err) {
-      setError(err.message);
+      showError(err);
     } finally {
       setIsSubmitting(false);
     }
@@ -79,16 +157,16 @@ const AuthForm = () => {
 
   async function handleForgotPassword() {
     if (!email) {
-      setError("Enter your email to reset password.");
+      setErrorDialog({ open: true, title: "Email required", message: "Enter your email to reset your password.", code: "validation" });
       return;
     }
     setIsSubmitting(true);
-    setError("");
+    setErrorDialog((s) => ({ ...s, open: false }));
     try {
       await sendPasswordResetEmail(auth, email);
       alert("Password reset email sent.");
     } catch (err) {
-      setError(err.message);
+      showError(err);
     } finally {
       setIsSubmitting(false);
     }
@@ -96,7 +174,7 @@ const AuthForm = () => {
 
   return (
     <div className="auth-container">
-      <div className="auth-card">
+      <div className={`auth-card ${isRegister ? 'signup-mode' : 'login-mode'}`}>
         <div className="brand">
           <div className="brand-logo" aria-hidden="true">🗣️</div>
           <div>
@@ -105,12 +183,58 @@ const AuthForm = () => {
           </div>
         </div>
 
-        <h2 className="auth-title">{isRegister ? "Create your account" : "Welcome back"}</h2>
-        <p className="auth-subtitle">{isRegister ? "Start learning with confidence" : "Sign in to continue"}</p>
+        <div className="auth-header">
+          <h2 className="auth-title">{isRegister ? "Create your account" : "Welcome back"}</h2>
+          <p className="auth-subtitle">{isRegister ? "Start learning with confidence" : "Sign in to continue"}</p>
+          <div className="mode-indicator">
+            {isRegister ? "🆕 New to TalkBuddy?" : "👋 Returning user?"}
+          </div>
+        </div>
 
-        {error && <div className="error" role="alert">{error}</div>}
+        {errorDialog.open && (
+          <div className="modal-overlay" role="presentation" onClick={() => setErrorDialog((s) => ({ ...s, open: false }))}>
+            <div className="modal" role="alertdialog" aria-modal="true" aria-labelledby="err-title" aria-describedby="err-desc" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3 id="err-title">{errorDialog.title}</h3>
+                <button className="icon-btn" aria-label="Close" onClick={() => setErrorDialog((s) => ({ ...s, open: false }))}>✕</button>
+              </div>
+              <div id="err-desc" className="modal-body">{errorDialog.message}</div>
+              <div className="modal-footer">
+                <button className="primary" onClick={() => setErrorDialog((s) => ({ ...s, open: false }))}>OK</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <form className="auth-form" onSubmit={handleAuth} noValidate>
+          {isRegister && (
+            <>
+              <div className="form-field">
+                <label htmlFor="name">Full name</label>
+                <input
+                  id="name"
+                  name="name"
+                  type="text"
+                  placeholder="Jane Doe"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  autoComplete="name"
+                  required
+                />
+              </div>
+              <div className="form-field">
+                <label htmlFor="goal">Your English goal (optional)</label>
+                <input
+                  id="goal"
+                  name="goal"
+                  type="text"
+                  placeholder="Crack interviews / fluency / travel, etc."
+                  value={goal}
+                  onChange={(e) => setGoal(e.target.value)}
+                />
+              </div>
+            </>
+          )}
           <div className="form-field">
             <label htmlFor="email">Email</label>
             <input
