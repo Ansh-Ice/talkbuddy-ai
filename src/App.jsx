@@ -1,11 +1,77 @@
 import './App.css'
+import { useEffect, useState } from 'react'
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { onAuthStateChanged, sendEmailVerification } from 'firebase/auth'
+import { auth } from './firebase'
 import AuthForm from './AuthForm'
+import Home from './Home'
+import Dashboard from './Dashboard'
 
 function App() {
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser)
+      setLoading(false)
+    })
+    return () => unsub()
+  }, [])
+
+  if (loading) return null
+
   return (
     <>
-      <AuthForm />
+      <Routes>
+        <Route path="/" element={<Home user={user} />} />
+        <Route
+          path="/auth"
+          element={user ? <Navigate to={user.emailVerified ? '/dashboard' : '/verify-email'} replace /> : <AuthForm />}
+        />
+        <Route
+          path="/dashboard"
+          element={user ? <Dashboard user={user} /> : <Navigate to="/auth" replace />}
+        />
+        <Route
+          path="/verify-email"
+          element={user && !user.emailVerified ? (
+            <VerifyEmailView user={user} />
+          ) : (
+            <Navigate to={user ? '/dashboard' : '/auth'} replace />
+          )}
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </>
+  )
+}
+
+function VerifyEmailView({ user }) {
+  const [sent, setSent] = useState(false)
+  const [sending, setSending] = useState(false)
+
+  async function handleSend() {
+    setSending(true)
+    try {
+      await sendEmailVerification(user)
+      setSent(true)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div className="auth-container">
+      <div className="auth-card">
+        <h2>Verify your email</h2>
+        <p>We sent a verification link to {user.email}. Please verify to continue.</p>
+        <button className="primary" onClick={handleSend} disabled={sending}>
+          {sending ? 'Sending…' : sent ? 'Resent' : 'Resend verification email'}
+        </button>
+      </div>
+    </div>
   )
 }
 
