@@ -6,6 +6,7 @@ import { auth } from './firebase'
 import AuthForm from './AuthForm'
 import Home from './Home'
 import Dashboard from './Dashboard'
+import ConfirmDeletion from './ConfirmDeletion'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -37,6 +38,10 @@ function App() {
         <Route
           path="/verify-email"
           element={user ? (user.emailVerified ? <Navigate to='/' replace /> : <VerifyEmailView user={user} />) : <Navigate to='/auth' replace />}
+        />
+        <Route
+          path="/confirm-deletion"
+          element={<ConfirmDeletion />}
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -1,14 +1,26 @@
 import { Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { auth } from './firebase';
 import { signOut } from 'firebase/auth';
+import ProfileSidebar from './ProfileSidebar';
 
 export default function Home({ user }) {
   const navigate = useNavigate();
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   async function handleLogout() {
     await signOut(auth);
     navigate('/auth', { replace: true });
   }
+
+  const handleProfileClick = (e) => {
+    e.preventDefault();
+    if (user) {
+      setIsProfileOpen(true);
+    } else {
+      navigate('/auth');
+    }
+  };
   return (
     <div className="home">
       <header className="topnav">
@@ -20,7 +32,7 @@ export default function Home({ user }) {
           <Link to="/">Home</Link>
           <a href="#features">Features</a>
           <a href="#progress">Progress</a>
-          <a href="#profile">Profile</a>
+          <a href="#profile" onClick={handleProfileClick}>Profile</a>
           <a href="#settings">Settings</a>
           {user ? (
             <button className="logout" onClick={handleLogout}>Logout</button>
@@ -125,6 +137,15 @@ export default function Home({ user }) {
         </div>
         <div className="copy">© {new Date().getFullYear()} TalkBuddy AI</div>
       </footer>
+
+      {/* Profile Sidebar */}
+      {user && (
+        <ProfileSidebar 
+          user={user} 
+          isOpen={isProfileOpen} 
+          onClose={() => setIsProfileOpen(false)} 
+        />
+      )}
     </div>
   );
 }
