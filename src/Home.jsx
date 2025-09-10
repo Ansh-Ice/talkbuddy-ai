@@ -1,17 +1,16 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useState } from "react";
 import { auth } from './firebase';
 import { signOut } from 'firebase/auth';
 import ProfileSidebar from './ProfileSidebar';
+import { useAuthValidation, useSecureLogout } from './hooks/useAuthValidation';
 
 export default function Home({ user }) {
-  const navigate = useNavigate();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
-  async function handleLogout() {
-    await signOut(auth);
-    navigate('/auth', { replace: true });
-  }
+  // Use custom hooks for authentication validation and secure logout
+  useAuthValidation(user, ['/']);
+  const handleLogout = useSecureLogout(() => signOut(auth));
 
   const handleProfileClick = (e) => {
     e.preventDefault();

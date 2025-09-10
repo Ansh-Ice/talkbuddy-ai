@@ -17,9 +17,41 @@ function App() {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser)
       setLoading(false)
+      
+      // If user is null (logged out), clear all session data
+      if (!firebaseUser) {
+        sessionStorage.clear();
+        localStorage.removeItem('user');
+      }
     })
     return () => unsub()
   }, [])
+
+  // Global route protection - prevent access to protected routes without authentication
+  useEffect(() => {
+    const handleRouteProtection = () => {
+      const currentPath = window.location.pathname;
+      const protectedRoutes = ['/', '/dashboard'];
+      const isProtectedRoute = protectedRoutes.includes(currentPath);
+      
+      if (isProtectedRoute && !user && !loading) {
+        // Clear any cached authentication data
+        sessionStorage.clear();
+        localStorage.removeItem('user');
+        navigate('/auth', { replace: true });
+      }
+    };
+
+    // Check on initial load and when user state changes
+    handleRouteProtection();
+    
+    // Also check when browser back/forward is used
+    window.addEventListener('popstate', handleRouteProtection);
+    
+    return () => {
+      window.removeEventListener('popstate', handleRouteProtection);
+    };
+  }, [user, loading, navigate])
 
   if (loading) return null
 

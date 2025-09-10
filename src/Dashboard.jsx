@@ -1,10 +1,11 @@
 import { signOut } from "firebase/auth";
 import { auth } from "./firebase";
+import { useAuthValidation, useSecureLogout } from './hooks/useAuthValidation';
 
 export default function Dashboard({ user }) {
-  const handleLogout = async () => {
-    await signOut(auth);
-  };
+  // Use custom hooks for authentication validation and secure logout
+  useAuthValidation(user, ['/dashboard']);
+  const handleLogout = useSecureLogout(() => signOut(auth));
 
   return (
     <div className="dashboard">
