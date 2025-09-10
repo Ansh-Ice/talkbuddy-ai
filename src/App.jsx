@@ -8,6 +8,8 @@ import Home from './Home'
 // import Dashboard from './Dashboard'
 import ConfirmDeletion from './ConfirmDeletion'
 import QuizTest from './QuizTest'
+import OralQuestion from './OralQuestion'
+
 
 function App() {
   const [user, setUser] = useState(null)
@@ -80,6 +82,7 @@ function App() {
 
         {/* 🔹 Add quiz test route separately */}
         <Route path="/quiztest" element={<QuizTest />} />
+        <Route path="/oralquestion" element={<OralQuestion />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
