@@ -5,8 +5,9 @@ import { onAuthStateChanged, sendEmailVerification } from 'firebase/auth'
 import { auth } from './firebase'
 import AuthForm from './AuthForm'
 import Home from './Home'
-import Dashboard from './Dashboard'
+// import Dashboard from './Dashboard'
 import ConfirmDeletion from './ConfirmDeletion'
+import QuizTest from './QuizTest'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -18,39 +19,33 @@ function App() {
       setUser(firebaseUser)
       setLoading(false)
       
-      // If user is null (logged out), clear all session data
       if (!firebaseUser) {
-        sessionStorage.clear();
-        localStorage.removeItem('user');
+        sessionStorage.clear()
+        localStorage.removeItem('user')
       }
     })
     return () => unsub()
   }, [])
 
-  // Global route protection - prevent access to protected routes without authentication
   useEffect(() => {
     const handleRouteProtection = () => {
-      const currentPath = window.location.pathname;
-      const protectedRoutes = ['/', '/dashboard'];
-      const isProtectedRoute = protectedRoutes.includes(currentPath);
+      const currentPath = window.location.pathname
+      const protectedRoutes = ['/', '/dashboard']
+      const isProtectedRoute = protectedRoutes.includes(currentPath)
       
       if (isProtectedRoute && !user && !loading) {
-        // Clear any cached authentication data
-        sessionStorage.clear();
-        localStorage.removeItem('user');
-        navigate('/auth', { replace: true });
+        sessionStorage.clear()
+        localStorage.removeItem('user')
+        navigate('/auth', { replace: true })
       }
-    };
+    }
 
-    // Check on initial load and when user state changes
-    handleRouteProtection();
-    
-    // Also check when browser back/forward is used
-    window.addEventListener('popstate', handleRouteProtection);
+    handleRouteProtection()
+    window.addEventListener('popstate', handleRouteProtection)
     
     return () => {
-      window.removeEventListener('popstate', handleRouteProtection);
-    };
+      window.removeEventListener('popstate', handleRouteProtection)
+    }
   }, [user, loading, navigate])
 
   if (loading) return null
@@ -58,23 +53,34 @@ function App() {
   return (
     <>
       <Routes>
-        <Route path="/" element={user && !user.emailVerified ? <Navigate to="/verify-email" replace /> : <Home user={user} />} />
+        <Route
+          path="/"
+          element={
+            user && !user.emailVerified
+              ? <Navigate to="/verify-email" replace />
+              : <Home user={user} />
+          }
+        />
         <Route
           path="/auth"
-          element={user ? <Navigate to='/' replace /> : <AuthForm />}
+          element={user ? <Navigate to="/" replace /> : <AuthForm />}
         />
-        <Route
+        {/* <Route
           path="/dashboard"
           element={user ? <Dashboard user={user} /> : <Navigate to="/auth" replace />}
-        />
+        /> */}
         <Route
           path="/verify-email"
-          element={user ? (user.emailVerified ? <Navigate to='/' replace /> : <VerifyEmailView user={user} />) : <Navigate to='/auth' replace />}
+          element={user ? (user.emailVerified ? <Navigate to="/" replace /> : <VerifyEmailView user={user} />) : <Navigate to="/auth" replace />}
         />
         <Route
           path="/confirm-deletion"
           element={<ConfirmDeletion />}
         />
+
+        {/* 🔹 Add quiz test route separately */}
+        <Route path="/quiztest" element={<QuizTest />} />
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>

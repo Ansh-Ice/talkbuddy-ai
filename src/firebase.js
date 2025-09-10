@@ -27,4 +27,5 @@ export const auth = getAuth(app);
 // 🔹 Initialize Firestore for registration registry
 export const db = getFirestore(app);
 
+
 export default app;
