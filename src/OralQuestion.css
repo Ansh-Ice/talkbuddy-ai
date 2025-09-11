@@ -69,7 +69,21 @@
 }
 
 .oq-transcript{display:flex;flex-direction:column;gap:8px}
-.oq-label{font-size:13px;color:var(--muted)}
+.oq-label{
+  font-size:13px;
+  color:var(--muted);
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.oq-status{
+  font-size:12px;
+  padding:2px 6px;
+  border-radius:4px;
+  background:rgba(46,89,255,0.1);
+  color:var(--accent-1);
+  font-weight:500;
+}
 
 .oq-transcript-box{
   min-height:88px;
@@ -107,8 +121,118 @@
 .oq-score{font-size:15px;color:#08315f}
 .oq-feedback{font-size:14px;color:var(--muted);flex:1;text-align:right}
 
+/* Completion screen styles */
+.oq-completion-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.oq-total-score {
+  text-align: center;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(46, 89, 255, 0.1), rgba(0, 192, 255, 0.1));
+  border-radius: 12px;
+  border: 1px solid rgba(46, 89, 255, 0.2);
+}
+
+.oq-total-score h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  color: #07224a;
+}
+
+.oq-score-display {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.oq-score-number {
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--accent-1);
+  text-shadow: 0 2px 4px rgba(30, 111, 255, 0.2);
+}
+
+.oq-score-max {
+  font-size: 24px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.oq-percentage {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--accent-2);
+}
+
+.oq-score-breakdown h4 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  color: #07224a;
+}
+
+.oq-scores-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.oq-score-item {
+  padding: 12px 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.7), rgba(255,255,255,0.55));
+  border-radius: 10px;
+  border: 1px solid rgba(10,34,64,0.05);
+}
+
+.oq-score-question {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.oq-score-question strong {
+  color: #08315f;
+  font-size: 14px;
+}
+
+.oq-score-value {
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  color: white;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.oq-score-feedback {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.oq-continue-section {
+  margin-top: 24px;
+  text-align: center;
+}
+
+.btn-dashboard {
+  background: linear-gradient(90deg, #4fe0a6, #1fbf7b);
+  box-shadow: 0 6px 18px rgba(31,191,123,0.12);
+  color: #022;
+  font-size: 16px;
+  padding: 12px 24px;
+}
+
 @media (max-width:620px){
   .oq-card{padding:16px}
   .oq-eval-row{flex-direction:column;align-items:flex-start;gap:8px}
   .oq-feedback{text-align:left}
+  .oq-score-number{font-size: 36px}
+  .oq-score-max{font-size: 20px}
+  .oq-percentage{font-size: 18px}
 }

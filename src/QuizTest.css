@@ -289,6 +289,32 @@
   overflow-y: auto;
 }
 
+/* Continue Section */
+.continue-section {
+  margin-top: 30px;
+  text-align: center;
+  padding: 20px 0;
+  border-top: 2px solid #e0e0e0;
+}
+
+.continue-button {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border: none;
+  padding: 15px 30px;
+  border-radius: 30px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+}
+
+.continue-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+}
+
 /* Landscape and large screen optimizations */
 @media (min-width: 1024px) and (orientation: landscape) {
   .quiz-container {

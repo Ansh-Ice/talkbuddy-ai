@@ -109,8 +109,17 @@ const AuthForm = () => {
           name: name.trim(),
           goal: goal.trim(),
           createdAt: Date.now(),
+          assessmentCompleted: false,
+          quizCompleted: false,
+          oralTestCompleted: false,
         });
-        await sendEmailVerification(cred.user);
+        try {
+          await sendEmailVerification(cred.user);
+          console.log("Email verification sent successfully");
+        } catch (emailError) {
+          console.error("Error sending email verification:", emailError);
+          // Continue with navigation even if email verification fails
+        }
         navigate("/verify-email", { replace: true });
       } else {
         const cred = await signInWithEmailAndPassword(auth, email, password);

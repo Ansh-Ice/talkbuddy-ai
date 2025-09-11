@@ -22,8 +22,11 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
-// 🔹 Initialize Firebase Authentication
+// 🔹 Initialize Firebase Authentication with settings to handle COOP
 export const auth = getAuth(app);
+
+// Configure auth settings to handle COOP issues
+auth.settings.appVerificationDisabledForTesting = false;
 // 🔹 Initialize Firestore for registration registry
 export const db = getFirestore(app);
 

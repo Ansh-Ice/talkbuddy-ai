@@ -5,7 +5,7 @@ import { signOut } from 'firebase/auth';
 import ProfileSidebar from './ProfileSidebar';
 import { useAuthValidation, useSecureLogout } from './hooks/useAuthValidation';
 
-export default function Home({ user }) {
+export default function Home({ user, userProfile }) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   // Use custom hooks for authentication validation and secure logout
@@ -68,6 +68,84 @@ export default function Home({ user }) {
           </div>
         </div>
       </section>
+
+      {/* Assessment Results Section */}
+      {userProfile?.assessmentCompleted && (
+        <section className="assessment-results" aria-labelledby="assessment-results">
+          <h2 id="assessment-results">Your Assessment Results 📊</h2>
+          <div className="results-grid">
+            <div className="result-card quiz-results">
+              <div className="result-header">
+                <h3>Written Test</h3>
+                <div className="result-score">
+                  {userProfile.quizScore || 0}/{userProfile.quizTotalQuestions || 0}
+                  <span className="result-percentage">({userProfile.quizPercentage || 0}%)</span>
+                </div>
+              </div>
+              <div className="result-details">
+                <div className="result-bar">
+                  <div 
+                    className="result-progress" 
+                    style={{ width: `${userProfile.quizPercentage || 0}%` }}
+                  ></div>
+                </div>
+                <p className="result-description">
+                  {userProfile.quizPercentage >= 80 ? "Excellent performance!" : 
+                   userProfile.quizPercentage >= 60 ? "Good work! Keep practicing." : 
+                   "Room for improvement. Practice more!"}
+                </p>
+              </div>
+            </div>
+
+            <div className="result-card oral-results">
+              <div className="result-header">
+                <h3>Oral Test</h3>
+                <div className="result-score">
+                  {userProfile.oralTestScore || 0}/{userProfile.oralTestTotalQuestions * 10 || 0}
+                  <span className="result-percentage">({userProfile.oralTestPercentage || 0}%)</span>
+                </div>
+              </div>
+              <div className="result-details">
+                <div className="result-bar">
+                  <div 
+                    className="result-progress" 
+                    style={{ width: `${userProfile.oralTestPercentage || 0}%` }}
+                  ></div>
+                </div>
+                <p className="result-description">
+                  {userProfile.oralTestPercentage >= 80 ? "Outstanding speaking skills!" : 
+                   userProfile.oralTestPercentage >= 60 ? "Good pronunciation and fluency!" : 
+                   "Keep practicing speaking to improve!"}
+                </p>
+              </div>
+            </div>
+
+            <div className="result-card overall-results">
+              <div className="result-header">
+                <h3>Overall Assessment</h3>
+                <div className="result-score">
+                  {Math.round(((userProfile.quizPercentage || 0) + (userProfile.oralTestPercentage || 0)) / 2)}%
+                </div>
+              </div>
+              <div className="result-details">
+                <div className="result-bar">
+                  <div 
+                    className="result-progress overall-progress" 
+                    style={{ width: `${Math.round(((userProfile.quizPercentage || 0) + (userProfile.oralTestPercentage || 0)) / 2)}%` }}
+                  ></div>
+                </div>
+                <p className="result-description">
+                  {Math.round(((userProfile.quizPercentage || 0) + (userProfile.oralTestPercentage || 0)) / 2) >= 80 ? 
+                    "🎉 Excellent overall performance! You're ready for advanced practice!" :
+                    Math.round(((userProfile.quizPercentage || 0) + (userProfile.oralTestPercentage || 0)) / 2) >= 60 ?
+                    "👍 Good progress! Continue practicing to improve further." :
+                    "💪 Keep practicing! Every step forward counts."}
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="insights" aria-labelledby="daily-insights">
         <h2 id="daily-insights">Daily Insights</h2>
