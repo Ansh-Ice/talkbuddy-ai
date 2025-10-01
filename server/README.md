@@ -66,3 +66,4 @@ Sends password reset email.
 - ✅ CORS support for frontend
 - ✅ Error handling
 - ✅ Professional email design
+

@@ -1,4 +1,5 @@
 import './App.css'
+import './AdminDashboard.css'
 import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { onAuthStateChanged, sendEmailVerification } from 'firebase/auth'
@@ -9,6 +10,7 @@ import Home from './Home'
 import ConfirmDeletion from './ConfirmDeletion'
 import QuizTest from './QuizTest'
 import OralQuestion from './OralQuestion'
+import AdminDashboard from './AdminDashboard'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -54,7 +56,7 @@ function App() {
         if (isStable) return // Prevent multiple rapid changes
         
         isStable = true
-        setUser(firebaseUser)
+      setUser(firebaseUser)
 
         if (firebaseUser) {
           console.log("User details:", {
@@ -81,7 +83,7 @@ function App() {
           setUserProfile(null)
         }
 
-        setLoading(false)
+      setLoading(false)
         setAuthStateStable(true)
         
         // Reset stability flag after a delay
@@ -103,6 +105,25 @@ function App() {
   useEffect(() => {
     if (loading || !authStateStable) return
     const currentPath = window.location.pathname
+
+    // Admin dashboard bypasses Firebase user auth; guarded by localStorage adminSession
+    if (currentPath.startsWith('/admin')) {
+      const adminSession = (() => {
+        try { return JSON.parse(localStorage.getItem('adminSession') || 'null') } catch { return null }
+      })()
+      if (currentPath === '/admin/dashboard') {
+        if (!adminSession || !adminSession.isAdmin) {
+          console.log('No admin session → redirecting to /auth')
+          navigate('/auth', { replace: true })
+        }
+        return
+      }
+      // Unknown admin sub-route → send to auth
+      if (!adminSession || !adminSession.isAdmin) {
+        navigate('/auth', { replace: true })
+      }
+      return
+    }
 
     if (!user) {
       if (currentPath !== '/auth') {
@@ -158,17 +179,17 @@ function App() {
   if (loading) return <div>Loading...</div>
 
   return (
-    <Routes>
-      <Route
+      <Routes>
+        <Route
         path="/"
         element={<Home user={user} userProfile={userProfile} />}
-      />
-      <Route
+        />
+        <Route
         path="/auth"
         element={user ? <Navigate to="/" replace /> : <AuthForm />}
-      />
-      <Route
-        path="/verify-email"
+        />
+        <Route
+          path="/verify-email"
         element={
           user ? (
             user.emailVerified ? <Navigate to="/" replace /> : <VerifyEmailView user={user} />
@@ -206,8 +227,11 @@ function App() {
           )
         }
       />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      {/* Admin Dashboard Route (no separate admin login page) */}
+      <Route path="/admin/dashboard" element={<AdminDashboard />} />
+      
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
   )
 }
 
