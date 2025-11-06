@@ -33,7 +33,6 @@ export default function Home({ user, userProfile }) {
           <a href="#progress">Progress</a>
           <a href="#profile" onClick={handleProfileClick}>Profile</a>
           <a href="#settings">Settings</a>
-          <Link to="/admin/login" className="admin-link">Admin</Link>
           {user ? (
             <button className="logout" onClick={handleLogout}>Logout</button>
           ) : (

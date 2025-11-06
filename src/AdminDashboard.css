@@ -1098,6 +1098,7 @@
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s ease;
+  color: #667eea;
 }
 
 .action-btn.edit {

@@ -93,14 +93,7 @@ export default function ProfileSidebar({ user, isOpen, onClose }) {
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      onClose();
-    } catch (error) {
-      setError("Failed to logout: " + error.message);
-    }
-  };
+  // Logout button removed from profile section as per request
 
   const handleChangePassword = async () => {
     setIsLoading(true);
@@ -387,15 +380,7 @@ export default function ProfileSidebar({ user, isOpen, onClose }) {
               >
                 Change Password
               </button>
-              
-              <button 
-                className="logout-btn" 
-                onClick={handleLogout}
-                disabled={isLoading}
-              >
-                Logout
-              </button>
-              
+
               <button 
                 className="delete-btn" 
                 onClick={handleDeleteProfile}

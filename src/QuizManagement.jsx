@@ -28,14 +28,6 @@ const QuizManagement = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDifficulty, setFilterDifficulty] = useState('all');
-  
-  const [newQuestion, setNewQuestion] = useState({
-    question: '',
-    options: ['', '', '', ''],
-    correctAnswer: 0,
-    difficulty: 'medium',
-    category: 'general'
-  });
 
   useEffect(() => {
     loadQuestions();
@@ -45,7 +37,7 @@ const QuizManagement = () => {
     try {
       setLoading(true);
       const questionsSnapshot = await getDocs(
-        query(collection(db, 'quizQuestions'), orderBy('createdAt', 'desc'))
+        query(collection(db, 'questions'))
       );
       const questionsData = questionsSnapshot.docs.map(doc => ({
         id: doc.id,
@@ -59,20 +51,12 @@ const QuizManagement = () => {
     }
   };
 
-  const handleAddQuestion = async (e) => {
-    e.preventDefault();
+  const handleAddQuestion = async (questionData) => {
     try {
-      await addDoc(collection(db, 'quizQuestions'), {
-        ...newQuestion,
+      await addDoc(collection(db, 'questions'), {
+        ...questionData,
         createdAt: Date.now(),
         updatedAt: Date.now()
-      });
-      setNewQuestion({
-        question: '',
-        options: ['', '', '', ''],
-        correctAnswer: 0,
-        difficulty: 'medium',
-        category: 'general'
       });
       setShowAddForm(false);
       loadQuestions();
@@ -83,7 +67,7 @@ const QuizManagement = () => {
 
   const handleEditQuestion = async (questionId, updatedData) => {
     try {
-      await updateDoc(doc(db, 'quizQuestions', questionId), {
+      await updateDoc(doc(db, 'questions', questionId), {
         ...updatedData,
         updatedAt: Date.now()
       });
@@ -97,7 +81,7 @@ const QuizManagement = () => {
   const handleDeleteQuestion = async (questionId) => {
     if (window.confirm('Are you sure you want to delete this question?')) {
       try {
-        await deleteDoc(doc(db, 'quizQuestions', questionId));
+        await deleteDoc(doc(db, 'questions', questionId));
         loadQuestions();
       } catch (error) {
         console.error('Error deleting question:', error);
@@ -255,10 +239,24 @@ const QuizManagement = () => {
   };
 
   const AddQuestionForm = () => {
+    // Local state so typing doesn't reset focus
+    const [localQuestion, setLocalQuestion] = useState({
+      question: '',
+      options: ['', '', '', ''],
+      correctAnswer: 0,
+      difficulty: 'medium',
+      category: 'general'
+    });
+
     const handleOptionChange = (index, value) => {
-      const newOptions = [...newQuestion.options];
+      const newOptions = [...localQuestion.options];
       newOptions[index] = value;
-      setNewQuestion({ ...newQuestion, options: newOptions });
+      setLocalQuestion({ ...localQuestion, options: newOptions });
+    };
+
+    const handleSubmit = (e) => {
+      e.preventDefault();
+      handleAddQuestion(localQuestion);
     };
 
     return (
@@ -273,12 +271,12 @@ const QuizManagement = () => {
           </button>
         </div>
 
-        <form onSubmit={handleAddQuestion}>
+        <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>Question</label>
             <textarea
-              value={newQuestion.question}
-              onChange={(e) => setNewQuestion({ ...newQuestion, question: e.target.value })}
+              value={localQuestion.question}
+              onChange={(e) => setLocalQuestion({ ...localQuestion, question: e.target.value })}
               placeholder="Enter the question..."
               required
             />
@@ -286,7 +284,7 @@ const QuizManagement = () => {
 
           <div className="form-group">
             <label>Options</label>
-            {newQuestion.options.map((option, index) => (
+            {localQuestion.options.map((option, index) => (
               <div key={index} className="option-input-group">
                 <span className="option-label">{String.fromCharCode(65 + index)}.</span>
                 <input
@@ -299,8 +297,8 @@ const QuizManagement = () => {
                 <input
                   type="radio"
                   name="correctAnswer"
-                  checked={newQuestion.correctAnswer === index}
-                  onChange={() => setNewQuestion({ ...newQuestion, correctAnswer: index })}
+                  checked={localQuestion.correctAnswer === index}
+                  onChange={() => setLocalQuestion({ ...localQuestion, correctAnswer: index })}
                 />
                 <label>Correct</label>
               </div>
@@ -311,8 +309,8 @@ const QuizManagement = () => {
             <div className="form-group">
               <label>Difficulty</label>
               <select
-                value={newQuestion.difficulty}
-                onChange={(e) => setNewQuestion({ ...newQuestion, difficulty: e.target.value })}
+                value={localQuestion.difficulty}
+                onChange={(e) => setLocalQuestion({ ...localQuestion, difficulty: e.target.value })}
               >
                 <option value="easy">Easy</option>
                 <option value="medium">Medium</option>
@@ -324,8 +322,8 @@ const QuizManagement = () => {
               <label>Category</label>
               <input
                 type="text"
-                value={newQuestion.category}
-                onChange={(e) => setNewQuestion({ ...newQuestion, category: e.target.value })}
+                value={localQuestion.category}
+                onChange={(e) => setLocalQuestion({ ...localQuestion, category: e.target.value })}
                 placeholder="Category"
               />
             </div>
