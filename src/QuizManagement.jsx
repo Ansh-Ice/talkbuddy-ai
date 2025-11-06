@@ -169,6 +169,7 @@ const QuizManagement = () => {
               value={editData.question}
               onChange={(e) => setEditData({ ...editData, question: e.target.value })}
               required
+              style={{ color: 'black' }}
             />
           </div>
 
@@ -183,6 +184,7 @@ const QuizManagement = () => {
                   onChange={(e) => handleOptionChange(index, e.target.value)}
                   placeholder={`Option ${String.fromCharCode(65 + index)}`}
                   required
+                  style={{ color: 'black' }}
                 />
                 <input
                   type="radio"
@@ -215,6 +217,7 @@ const QuizManagement = () => {
                 value={editData.category}
                 onChange={(e) => setEditData({ ...editData, category: e.target.value })}
                 placeholder="Category"
+                style={{ color: 'black' }}
               />
             </div>
           </div>
@@ -293,6 +296,7 @@ const QuizManagement = () => {
                   onChange={(e) => handleOptionChange(index, e.target.value)}
                   placeholder={`Option ${String.fromCharCode(65 + index)}`}
                   required
+                  style={{ color: 'black' }}
                 />
                 <input
                   type="radio"
@@ -325,6 +329,7 @@ const QuizManagement = () => {
                 value={localQuestion.category}
                 onChange={(e) => setLocalQuestion({ ...localQuestion, category: e.target.value })}
                 placeholder="Category"
+                style={{ color: 'black' }}
               />
             </div>
           </div>

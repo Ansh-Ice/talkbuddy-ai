@@ -24,7 +24,7 @@ const AdminDashboard = () => {
   const [adminData, setAdminData] = useState({
     totalUsers: 0,
     onlineUsers: 0,
-    totalQuizzes: 0,
+    // totalQuizzes: 0,
     recentActivity: []
   });
   const [loading, setLoading] = useState(true);
@@ -68,14 +68,14 @@ const AdminDashboard = () => {
       const onlineUsers = onlineUsersSnapshot.size;
 
       // Get total quizzes (if you have a quizzes collection)
-      const quizzesSnapshot = await getDocs(collection(db, 'quizQuestions'));
-      const totalQuizzes = quizzesSnapshot.size;
+      // const quizzesSnapshot = await getDocs(collection(db, 'quizQuestions'));
+      // const totalQuizzes = quizzesSnapshot.size;
 
       // Get recent users
       const recentUsersQuery = query(
         collection(db, 'users'),
         orderBy('createdAt', 'desc'),
-        limit(5)
+        limit(3)
       );
       const recentUsersSnapshot = await getDocs(recentUsersQuery);
       const recentActivity = recentUsersSnapshot.docs.map(doc => ({
@@ -87,7 +87,7 @@ const AdminDashboard = () => {
       setAdminData({
         totalUsers,
         onlineUsers,
-        totalQuizzes,
+        // totalQuizzes,
         recentActivity
       });
     } catch (error) {
