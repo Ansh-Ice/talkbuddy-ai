@@ -12,7 +12,7 @@ import {
   sendEmailVerification,
   updateProfile,
 } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, collection, getDocs, limit, query } from "firebase/firestore";
 
 const AuthForm = () => {
   const [email, setEmail] = useState("");
@@ -82,11 +82,64 @@ const AuthForm = () => {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  const isAdminUsername = !isRegister && (email || '').trim() && !(email || '').includes('@');
+
   async function handleAuth(e) {
     e.preventDefault();
     setIsSubmitting(true);
     setErrorDialog((s) => ({ ...s, open: false }));
     try {
+      // Admin login via Firestore (only when username style without @)
+      if (!isRegister && isAdminUsername) {
+        try {
+          let cfg = {};
+          const cfgRef = doc(db, 'admin', 'config');
+          const cfgSnap = await getDoc(cfgRef);
+          if (cfgSnap.exists()) {
+            cfg = cfgSnap.data() || {};
+          } else {
+            const q = query(collection(db, 'admin'), limit(1));
+            const colSnap = await getDocs(q);
+            if (!colSnap.empty) {
+              cfg = colSnap.docs[0].data() || {};
+            } else {
+              await setDoc(cfgRef, { username: 'sneh', password: 'sneh123', seededAt: Date.now() }, { merge: true });
+              const seeded = await getDoc(cfgRef);
+              cfg = seeded.data() || {};
+            }
+          }
+          const inputUser = (email || '').trim();
+          const inputPass = password;
+          if (inputUser === (cfg.username || '') && inputPass === (cfg.password || '')) {
+            localStorage.setItem('adminSession', JSON.stringify({
+              username: cfg.username,
+              loginTime: Date.now(),
+              isAdmin: true,
+              method: 'firestore'
+            }));
+            navigate('/admin/dashboard', { replace: true });
+            return;
+          }
+          // If admin username path, do NOT fall through to Firebase email/password
+          showError({ code: 'auth/invalid-credential', message: 'Invalid admin credentials' })
+          return;
+        } catch (e) {
+          // If Firestore unreachable, allow static fallback
+          if ((email || '').trim() === 'sneh' && password === 'sneh123') {
+            localStorage.setItem('adminSession', JSON.stringify({
+              username: 'sneh',
+              loginTime: Date.now(),
+              isAdmin: true,
+              method: 'static-fallback'
+            }));
+            navigate('/admin/dashboard', { replace: true });
+            return;
+          }
+          showError({ code: 'auth/network-request-failed', message: 'Could not verify admin. Check connection or try again.' })
+          return;
+        }
+      }
+
       if (isRegister) {
         if (!name.trim()) {
           setError("Please enter your name.");
@@ -122,6 +175,11 @@ const AuthForm = () => {
         }
         navigate("/verify-email", { replace: true });
       } else {
+        // Guard: only attempt Firebase auth for real emails
+        if (!(email || '').includes('@')) {
+          showError({ code: 'auth/invalid-email', message: 'Enter a valid email to sign in, or use admin username without @' })
+          return;
+        }
         const cred = await signInWithEmailAndPassword(auth, email, password);
         // Do NOT send verification on login. If not verified, require verification first.
         if (cred.user.emailVerified) {
@@ -215,7 +273,7 @@ const AuthForm = () => {
           </div>
         )}
 
-        <form className="auth-form" onSubmit={handleAuth} noValidate>
+        <form className="auth-form" onSubmit={handleAuth} noValidate autoComplete="off">
           {isRegister && (
             <>
               <div className="form-field">
@@ -245,16 +303,16 @@ const AuthForm = () => {
             </>
           )}
           <div className="form-field">
-            <label htmlFor="email">Email</label>
+            <label htmlFor="email">Email or admin username</label>
             <input
               id="email"
               name="email"
-              type="email"
-              placeholder="you@example.com"
+              type={isAdminUsername ? 'text' : 'email'}
+              placeholder={isAdminUsername ? "admin username (e.g. 'sneh')" : "you@example.com"}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              inputMode="email"
+              autoComplete={isAdminUsername ? 'username' : 'email'}
+              inputMode={isAdminUsername ? 'text' : 'email'}
               required
             />
           </div>
@@ -263,12 +321,12 @@ const AuthForm = () => {
             <label htmlFor="password">Password</label>
             <input
               id="password"
-              name="password"
+              name={isAdminUsername ? 'admin-password' : 'password'}
               type="password"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              autoComplete={isRegister ? 'new-password' : 'current-password'}
+              autoComplete={isAdminUsername ? 'new-password' : (isRegister ? 'new-password' : 'current-password')}
               required
             />
           </div>
@@ -305,6 +363,8 @@ const AuthForm = () => {
             </>
           )}
         </p>
+
+        {/* Admin link removed; admin login handled on this form via Firestore */}
       </div>
     </div>
   );
