@@ -11,6 +11,7 @@ import ConfirmDeletion from './ConfirmDeletion'
 import QuizTest from './QuizTest'
 import OralQuestion from './OralQuestion'
 import AdminDashboard from './AdminDashboard'
+import AIQuiz from './AIQuiz'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -222,6 +223,19 @@ function App() {
               user={user}
               userProfile={userProfile}
               refreshUserProfile={refreshUserProfile}
+            />
+          ) : (
+            <Navigate to="/auth" replace />
+          )
+        }
+      />
+      <Route
+        path="/aiquiz"
+        element={
+          user ? (
+            <AIQuiz
+              user={user}
+              userProfile={userProfile}
             />
           ) : (
             <Navigate to="/auth" replace />
