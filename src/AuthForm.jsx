@@ -125,16 +125,16 @@ const AuthForm = () => {
           return;
         } catch (e) {
           // If Firestore unreachable, allow static fallback
-          if ((email || '').trim() === 'sneh' && password === 'sneh123') {
-            localStorage.setItem('adminSession', JSON.stringify({
-              username: 'sneh',
-              loginTime: Date.now(),
-              isAdmin: true,
-              method: 'static-fallback'
-            }));
-            navigate('/admin/dashboard', { replace: true });
-            return;
-          }
+          // if ((email || '').trim() === 'sneh' && password === 'sneh123') {
+          //   localStorage.setItem('adminSession', JSON.stringify({
+          //     username: 'sneh',
+          //     loginTime: Date.now(),
+          //     isAdmin: true,
+          //     method: 'static-fallback'
+          //   }));
+          //   navigate('/admin/dashboard', { replace: true });
+          //   return;
+          // }
           showError({ code: 'auth/network-request-failed', message: 'Could not verify admin. Check connection or try again.' })
           return;
         }
@@ -307,12 +307,13 @@ const AuthForm = () => {
             <input
               id="email"
               name="email"
-              type={isAdminUsername ? 'text' : 'email'}
+              type = "text"
+              // type={isAdminUsername ? 'text' : 'email'}
               placeholder={isAdminUsername ? "admin username (e.g. 'sneh')" : "you@example.com"}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              autoComplete={isAdminUsername ? 'username' : 'email'}
-              inputMode={isAdminUsername ? 'text' : 'email'}
+              // autoComplete={isAdminUsername ? 'username' : 'email'}
+              // inputMode={isAdminUsername ? 'text' : 'email'}
               required
             />
           </div>

@@ -190,7 +190,9 @@ const QuizManagement = () => {
                   type="radio"
                   name="correctAnswer"
                   checked={editData.correctAnswer === index}
-                  onChange={() => setEditData({ ...editData, correctAnswer: index })}
+                  onChange={() => 
+                      setEditData(prev => ({ ...prev, correctAnswer: index }))
+                    }
                 />
                 <label>Correct</label>
               </div>
