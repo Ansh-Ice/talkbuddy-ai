@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from datetime import datetime, timedelta
+from typing import List, Literal, Optional
 import ollama
 import json
 
@@ -41,6 +42,16 @@ class AssessmentSubmission(BaseModel):
     user_id: str
     assessment_id: str
     responses: list  # [{"question": "...", "answer": "..."}]
+
+
+class VoiceChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class VoiceChatRequest(BaseModel):
+    messages: List[VoiceChatMessage]
+    user_name: Optional[str] = None
 
 
 # -------------------- 1️⃣ Evaluate Answer --------------------
@@ -222,3 +233,37 @@ async def latest_assessment(user_id: str):
     for doc in docs:
         return {"data": doc.to_dict(), "id": doc.id}
     raise HTTPException(status_code=404, detail="No assessments found")
+
+
+# -------------------- 5️⃣ Voice Practice Chat --------------------
+@app.post("/voice_chat/")
+async def voice_chat(request: VoiceChatRequest):
+    """
+    Handles full voice-practice conversations with Gemma.
+    Frontend sends the rolling chat history so the response remains contextual.
+    """
+
+    if not request.messages:
+        raise HTTPException(status_code=400, detail="Conversation history is required")
+
+    learner_name = request.user_name or "there"
+    system_prompt = (
+        "You are TalkBuddy, a friendly English speaking coach helping learners build "
+        "confidence. Keep replies to 2-4 sentences, use simple language when needed, "
+        "ask follow-up questions, and offer encouragement. Address the learner as "
+        f"{learner_name} when it feels natural."
+    )
+
+    chat_messages = [{"role": "system", "content": system_prompt}]
+    chat_messages.extend({"role": msg.role, "content": msg.content} for msg in request.messages)
+
+    try:
+        response = ollama.chat(
+            model="gemma:2b",
+            messages=chat_messages
+        )
+        reply = response["message"]["content"].strip()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"AI response failed: {exc}") from exc
+
+    return {"reply": reply}

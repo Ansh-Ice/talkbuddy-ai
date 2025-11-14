@@ -55,7 +55,7 @@ export default function Home({ user, userProfile }) {
           <h1>Hi {user?.displayName || (user?.email ? user.email.split('@')[0] : 'there')} 👋</h1>
           <p className="hero-subtitle">Ready to practice your English today? Your AI coach is waiting!</p>
           <div className="cta-group">
-            <button className="cta voice">
+            <button className="cta voice" onClick={() => navigate("/voice-practice")}>
               <span className="cta-icon">🎙️</span>
               <div>
                 <div className="cta-title">Voice Practice</div>
