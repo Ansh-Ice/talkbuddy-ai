@@ -375,6 +375,43 @@ button {
   gap: 10px;
 }
 
+.social-logins .google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.3);
+  background: #ffffff;
+  color: #111827;
+  font-weight: 600;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.15);
+}
+
+.social-logins .google::before {
+  content: '';
+  width: 18px;
+  height: 18px;
+  background: url('https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg')
+    center/contain no-repeat;
+}
+
+.social-logins .google:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: rgba(15, 23, 42, 0.5);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.2);
+}
+
+.social-logins .google:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 .switch-mode {
   text-align: center;
   margin-top: 16px;
