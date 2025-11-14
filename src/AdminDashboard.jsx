@@ -32,22 +32,34 @@ const AdminDashboard = () => {
 
   // Check admin session
   useEffect(() => {
-    const adminSession = localStorage.getItem('adminSession');
-    if (!adminSession) {
-      navigate('/admin/login');
-      return;
-    }
+  const adminSession = localStorage.getItem('adminSession');
+  if (!adminSession) {
+    navigate('/admin/login', { replace: true });
+    return;
+  }
 
-    const sessionData = JSON.parse(adminSession);
-    // Check if session is valid (24 hours)
-    if (Date.now() - sessionData.loginTime > 24 * 60 * 60 * 1000) {
-      localStorage.removeItem('adminSession');
-      navigate('/admin/login');
-      return;
-    }
+  const sessionData = JSON.parse(adminSession);
+  if (Date.now() - sessionData.loginTime > 24 * 60 * 60 * 1000) {
+    localStorage.removeItem('adminSession');
+    navigate('/admin/login', { replace: true });
+    return;
+  }
 
-    loadDashboardData();
-  }, [navigate]);
+  // Remove dashboard from history (fix forward button)
+  navigate(window.location.pathname, { replace: true });
+
+  // Back button logout
+  window.history.pushState(null, '', window.location.href);
+  window.onpopstate = () => {
+    localStorage.removeItem('adminSession');
+    navigate('/admin/login', { replace: true });
+  };
+
+  loadDashboardData();
+}, [navigate]);
+
+
+
 
   const loadDashboardData = async () => {
     try {
@@ -99,7 +111,7 @@ const AdminDashboard = () => {
 
   const handleLogout = () => {
     localStorage.removeItem('adminSession');
-    navigate('/auth');
+    navigate('/admin/login', { replace: true });
   };
 
   const renderActiveTab = () => {

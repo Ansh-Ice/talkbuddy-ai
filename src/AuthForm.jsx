@@ -125,16 +125,16 @@ const AuthForm = () => {
           return;
         } catch (e) {
           // If Firestore unreachable, allow static fallback
-          if ((email || '').trim() === 'sneh' && password === 'sneh123') {
-            localStorage.setItem('adminSession', JSON.stringify({
-              username: 'sneh',
-              loginTime: Date.now(),
-              isAdmin: true,
-              method: 'static-fallback'
-            }));
-            navigate('/admin/dashboard', { replace: true });
-            return;
-          }
+          // if ((email || '').trim() === 'sneh' && password === 'sneh123') {
+          //   localStorage.setItem('adminSession', JSON.stringify({
+          //     username: 'sneh',
+          //     loginTime: Date.now(),
+          //     isAdmin: true,
+          //     method: 'static-fallback'
+          //   }));
+          //   navigate('/admin/dashboard', { replace: true });
+          //   return;
+          // }
           showError({ code: 'auth/network-request-failed', message: 'Could not verify admin. Check connection or try again.' })
           return;
         }
