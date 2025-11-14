@@ -1,0 +1,40 @@
+.aiquiz-container {
+    max-width: 600px;
+    margin: 2rem auto;
+    text-align: center;
+    padding: 1.5rem;
+    border-radius: 1rem;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+    background: #fff;
+  }
+  .option-btn {
+    display: block;
+    width: 100%;
+    padding: 0.7rem;
+    margin: 0.4rem 0;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid #ddd;
+    background: #f8f8f8;
+  }
+  .option-btn.active {
+    background: #2a7be4;
+    color: white;
+    border-color: #2a7be4;
+  }
+  .next-btn {
+    margin-top: 1rem;
+    padding: 0.6rem 1.2rem;
+    background: #4caf50;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .feedback-item.correct {
+    background: #e6ffe6;
+  }
+  .feedback-item.wrong {
+    background: #ffeaea;
+  }
+  

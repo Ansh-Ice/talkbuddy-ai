@@ -4,9 +4,13 @@ import { auth } from './firebase';
 import { signOut } from 'firebase/auth';
 import ProfileSidebar from './ProfileSidebar';
 import { useAuthValidation, useSecureLogout } from './hooks/useAuthValidation';
+import { useNavigate } from "react-router-dom";
+
+
 
 export default function Home({ user, userProfile }) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const navigate = useNavigate();
 
   // Use custom hooks for authentication validation and secure logout
   useAuthValidation(user, ['/']);
@@ -177,6 +181,9 @@ export default function Home({ user, userProfile }) {
       <section id="features" className="activities" aria-labelledby="recommended-activities">
         <h2 id="recommended-activities">Recommended Activities</h2>
         <div className="activity-grid">
+          <button className="card activity" onClick={() => navigate("/aiquiz")}>
+            🧩 Start AI Quiz
+          </button>
           <button className="card activity">⚡ Quick 2‑min warmup</button>
           <button className="card activity">💪 Confidence booster</button>
           <button className="card activity">🗣️ Debate practice</button>
