@@ -7,16 +7,18 @@ import {
   LogOut, 
   Menu,
   X,
-  TrendingUp,
   UserCheck,
-  Clock,
-  FileText
+  FileText,
+  Mic,
+  UserPlus
 } from 'lucide-react';
 import { db } from './firebase';
 import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 import AdminReports from './AdminReports';
 import AdminCharts from './AdminCharts';
 import QuizManagement from './QuizManagement';
+import ManageOralQuestions from './ManageOralQuestions';
+import AdminAccountManager from './AdminAccountManager';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('reports');
@@ -122,6 +124,10 @@ const AdminDashboard = () => {
         return <AdminCharts data={adminData} loading={loading} />;
       case 'quiz':
         return <QuizManagement />;
+      case 'oral':
+        return <ManageOralQuestions />;
+      case 'adminAccounts':
+        return <AdminAccountManager />;
       default:
         return <AdminReports data={adminData} loading={loading} />;
     }
@@ -131,6 +137,8 @@ const AdminDashboard = () => {
     { id: 'reports', label: 'Reports', icon: FileText },
     { id: 'charts', label: 'Charts & Analytics', icon: BarChart3 },
     { id: 'quiz', label: 'Quiz Management', icon: Settings },
+    { id: 'oral', label: 'Manage Oral Questions', icon: Mic },
+    { id: 'adminAccounts', label: 'Admin Controls', icon: UserPlus },
   ];
 
   if (loading) {
@@ -203,6 +211,8 @@ const AdminDashboard = () => {
               {activeTab === 'reports' && 'Reports & Statistics'}
               {activeTab === 'charts' && 'Charts & Analytics'}
               {activeTab === 'quiz' && 'Quiz Management'}
+              {activeTab === 'oral' && 'Oral Questions'}
+              {activeTab === 'adminAccounts' && 'Admin & Security'}
             </h1>
           </div>
 

@@ -12,7 +12,7 @@ import {
   sendEmailVerification,
   updateProfile,
 } from "firebase/auth";
-import { doc, getDoc, setDoc, collection, getDocs, limit, query } from "firebase/firestore";
+import { doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
 
 const AuthForm = () => {
   const [email, setEmail] = useState("");
@@ -92,36 +92,43 @@ const AuthForm = () => {
       // Admin login via Firestore (only when username style without @)
       if (!isRegister && isAdminUsername) {
         try {
-          let cfg = {};
           const cfgRef = doc(db, 'admin', 'config');
-          const cfgSnap = await getDoc(cfgRef);
-          if (cfgSnap.exists()) {
-            cfg = cfgSnap.data() || {};
-          } else {
-            const q = query(collection(db, 'admin'), limit(1));
-            const colSnap = await getDocs(q);
-            if (!colSnap.empty) {
-              cfg = colSnap.docs[0].data() || {};
-            } else {
-              await setDoc(cfgRef, { username: 'sneh', password: 'sneh123', seededAt: Date.now() }, { merge: true });
-              const seeded = await getDoc(cfgRef);
-              cfg = seeded.data() || {};
-            }
+          let cfgSnap = await getDoc(cfgRef);
+          if (!cfgSnap.exists()) {
+            await setDoc(cfgRef, { username: 'sneh', password: 'sneh123', seededAt: Date.now() }, { merge: true });
+            cfgSnap = await getDoc(cfgRef);
           }
-          const inputUser = (email || '').trim();
+
+          const adminDocsSnapshot = await getDocs(collection(db, 'admin'));
+          const adminRecords = adminDocsSnapshot.docs.map(docSnap => ({
+            id: docSnap.id,
+            ...(docSnap.data() || {})
+          }));
+
+          const inputUser = (email || '').trim().toLowerCase();
           const inputPass = password;
-          if (inputUser === (cfg.username || '') && inputPass === (cfg.password || '')) {
-            localStorage.setItem('adminSession', JSON.stringify({
-              username: cfg.username,
+
+          const matchedAdmin = adminRecords.find(record => {
+            const usernameCandidate = (record.username || record.id || '').trim().toLowerCase();
+            return usernameCandidate && usernameCandidate === inputUser;
+          });
+
+          if (matchedAdmin && inputPass === (matchedAdmin.password || '')) {
+            const resolvedUsername = matchedAdmin.username || matchedAdmin.id;
+            const sessionPayload = {
+              username: resolvedUsername,
+              docId: matchedAdmin.id,
               loginTime: Date.now(),
               isAdmin: true,
               method: 'firestore'
-            }));
+            };
+            localStorage.setItem('adminSession', JSON.stringify(sessionPayload));
             navigate('/admin/dashboard', { replace: true });
             return;
           }
+
           // If admin username path, do NOT fall through to Firebase email/password
-          showError({ code: 'auth/invalid-credential', message: 'Invalid admin credentials' })
+          showError({ code: 'auth/invalid-credential', message: 'Invalid admin credentials' });
           return;
         } catch (e) {
           // If Firestore unreachable, allow static fallback
