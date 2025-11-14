@@ -307,12 +307,13 @@ const AuthForm = () => {
             <input
               id="email"
               name="email"
-              type={isAdminUsername ? 'text' : 'email'}
+              type = "text"
+              // type={isAdminUsername ? 'text' : 'email'}
               placeholder={isAdminUsername ? "admin username (e.g. 'sneh')" : "you@example.com"}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              autoComplete={isAdminUsername ? 'username' : 'email'}
-              inputMode={isAdminUsername ? 'text' : 'email'}
+              // autoComplete={isAdminUsername ? 'username' : 'email'}
+              // inputMode={isAdminUsername ? 'text' : 'email'}
               required
             />
           </div>
