@@ -378,6 +378,7 @@ const QuizManagement = () => {
             type="text"
             placeholder="Search questions..."
             value={searchTerm}
+            style={{ color: '#000' }} 
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
