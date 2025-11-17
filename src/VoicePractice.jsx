@@ -1,16 +1,17 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Loader2, Mic, MicOff, RotateCcw, Volume2 } from "lucide-react";
 import "./VoicePractice.css";
 
-const API_BASE =
-  (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+const SILENCE_DELAY = 3000; // 3 seconds of silence to send message
+const MAX_RECORDING_TIME = 60000; // 1 minute max recording time
 
 const createId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 const VoicePractice = ({ user }) => {
   const navigate = useNavigate();
-  const [messages, setMessages] = useState(() => [
+  const [messages, setMessages] = useState([
     {
       id: createId(),
       role: "assistant",
@@ -26,53 +27,70 @@ const VoicePractice = ({ user }) => {
   const [speakingMessageId, setSpeakingMessageId] = useState(null);
   const [callActive, setCallActive] = useState(false);
   const [callConnecting, setCallConnecting] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [playedMessages, setPlayedMessages] = useState(new Set());
 
   const recognitionRef = useRef(null);
   const capturedSpeechRef = useRef("");
   const synthRef = useRef(null);
   const utteranceRef = useRef(null);
   const feedRef = useRef(null);
+  const silenceTimerRef = useRef(null);
+  const recordingTimerRef = useRef(null);
+  const resumeTimeoutRef = useRef(null);
   const messagesRef = useRef(messages);
   const callActiveRef = useRef(false);
+  const recognitionPausedRef = useRef(false);
+  const abortControllerRef = useRef(new AbortController());
 
-  const greeting = useMemo(() => {
-    const name =
-      user?.displayName ||
-      user?.profile?.name ||
-      (user?.email ? user.email.split("@")[0] : "there");
-    return `Hi ${name}! I'm ready whenever you want to practice. Tap the microphone, speak naturally, and I'll guide you.`;
-  }, [user]);
-
+  // Update messages ref when messages change
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
 
-  useEffect(() => {
-    setMessages((prev) => {
-      if (!prev.length || prev[0].role !== "assistant") return prev;
-      const updated = [...prev];
-      updated[0] = { ...updated[0], text: greeting };
-      return updated;
-    });
-  }, [greeting]);
-
+  // Auto-scroll to bottom when messages change
   useEffect(() => {
     if (feedRef.current) {
-      feedRef.current.scrollTo({
-        top: feedRef.current.scrollHeight,
-        behavior: "smooth",
-      });
+      feedRef.current.scrollTop = feedRef.current.scrollHeight;
     }
   }, [messages, interimText]);
 
+  // Auto-play new assistant messages once
   useEffect(() => {
-    callActiveRef.current = callActive;
-  }, [callActive]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
+    if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage.role === 'assistant' && 
+          !speakingMessageId && 
+          !isProcessing &&
+          !playedMessages.has(lastMessage.id)) {
+        setIsProcessing(true);
+        setPlayedMessages(prev => new Set([...prev, lastMessage.id]));
+        speakMessage(lastMessage);
+      }
     }
+  }, [messages, speakingMessageId, isProcessing, playedMessages]);
+
+  // Set up speech synthesis
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    
+    if ("speechSynthesis" in window && "SpeechSynthesisUtterance" in window) {
+      synthRef.current = window.speechSynthesis;
+      setTtsSupported(true);
+    } else {
+      setTtsSupported(false);
+    }
+
+    return () => {
+      if (synthRef.current?.speaking) {
+        synthRef.current.cancel();
+      }
+    };
+  }, []);
+
+  // Set up speech recognition
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -93,20 +111,31 @@ const VoicePractice = ({ user }) => {
       setError("");
       capturedSpeechRef.current = "";
       setInterimText("");
+      startSilenceTimer();
+      startRecordingTimer();
     };
 
     recognition.onerror = (event) => {
       setListening(false);
+      if (event.error === "aborted") return;
+      
       const friendlyMessage =
         event.error === "no-speech"
           ? "We couldn't hear anything. Try speaking a bit louder."
           : event.error === "not-allowed"
           ? "Microphone permission is required for voice practice."
           : "Speech recognition had an issue. Please try again.";
+      
       setError(friendlyMessage);
+      stopAllTimers();
     };
 
     recognition.onresult = (event) => {
+      // Skip if we're currently speaking or processing
+      if (speakingMessageId || isProcessing) return;
+      
+      resetSilenceTimer();
+      
       let interim = "";
       for (let i = event.resultIndex; i < event.results.length; i += 1) {
         const transcript = event.results[i][0].transcript;
@@ -123,178 +152,383 @@ const VoicePractice = ({ user }) => {
       setListening(false);
       const spoken = (capturedSpeechRef.current || "").trim();
       capturedSpeechRef.current = "";
-      if (spoken) {
+      
+      if (spoken && !speakingMessageId && !isProcessing) {
         handleTranscript(spoken);
       } else {
         setInterimText("");
       }
+      
+      if (recognitionPausedRef.current) return;
+      
       if (callActiveRef.current) {
         setTimeout(() => {
           try {
             recognition.start();
-          } catch {
-            /* no-op */
+          } catch (e) {
+            console.error('Error restarting recognition:', e);
           }
-        }, 200);
+        }, 500);
       }
     };
 
     recognitionRef.current = recognition;
 
     return () => {
+      stopAllTimers();
       recognition.stop();
     };
-  }, []);
+  }, [speakingMessageId, isProcessing]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if ("speechSynthesis" in window && "SpeechSynthesisUtterance" in window) {
-      synthRef.current = window.speechSynthesis;
-      setTtsSupported(true);
-    } else {
-      setTtsSupported(false);
-    }
-
-    return () => {
-      if (synthRef.current?.speaking) {
-        synthRef.current.cancel();
+  // Timer functions
+  const startSilenceTimer = () => {
+    stopSilenceTimer();
+    silenceTimerRef.current = setTimeout(() => {
+      if (capturedSpeechRef.current.trim() && !speakingMessageId && !isProcessing) {
+        const spoken = capturedSpeechRef.current.trim();
+        capturedSpeechRef.current = "";
+        setInterimText("");
+        handleTranscript(spoken);
       }
-    };
-  }, []);
+    }, SILENCE_DELAY);
+  };
 
+  const resetSilenceTimer = () => {
+    stopSilenceTimer();
+    if (callActiveRef.current && !speakingMessageId && !isProcessing) {
+      startSilenceTimer();
+    }
+  };
+
+  const stopSilenceTimer = () => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+  };
+
+  const startRecordingTimer = () => {
+    stopRecordingTimer();
+    recordingTimerRef.current = setTimeout(() => {
+      if (recognitionRef.current && !speakingMessageId && !isProcessing) {
+        recognitionRef.current.stop();
+        const spoken = capturedSpeechRef.current.trim();
+        if (spoken) {
+          handleTranscript(spoken);
+        }
+      }
+    }, MAX_RECORDING_TIME);
+  };
+
+  const stopRecordingTimer = () => {
+    if (recordingTimerRef.current) {
+      clearTimeout(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+  };
+
+  const stopAllTimers = () => {
+    stopSilenceTimer();
+    stopRecordingTimer();
+    clearTimeout(resumeTimeoutRef.current);
+  };
+
+  // Handle transcript from speech recognition
   const handleTranscript = (text) => {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed || speakingMessageId || isProcessing) return;
+    
     sendMessage(trimmed);
   };
 
-  const startCall = () => {
+  // Start/stop call functions
+  const startCall = async () => {
     if (!speechSupported || callActive) return;
+    
     setCallConnecting(true);
     setError("");
+    
     try {
-      recognitionRef.current?.start();
+      // Request microphone access
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Reset state
+      capturedSpeechRef.current = "";
+      setInterimText("");
       setCallActive(true);
       callActiveRef.current = true;
-      setCallConnecting(false);
+      
+      // Start recognition
+      recognitionRef.current.start();
+      
+      // Add welcome message if it's the first message
+      if (messages.length <= 1) {
+        setMessages([{
+          id: createId(),
+          role: "assistant",
+          text: "Hi! I'm your English practice partner. Start speaking and I'll help you improve!",
+        }]);
+      }
     } catch (err) {
+      console.error('Error starting call:', err);
+      setError("Unable to access the microphone. Please check your permissions and try again.");
+    } finally {
       setCallConnecting(false);
-      setError("Unable to access the microphone. Close other apps using it and try again.");
     }
   };
 
   const endCall = () => {
+    stopSpeaking();
+    
+    try {
+      recognitionRef.current?.stop();
+    } catch (e) {
+      console.error('Error stopping recognition:', e);
+    }
+    
     setCallActive(false);
     callActiveRef.current = false;
-    recognitionRef.current?.stop();
     setListening(false);
     setInterimText("");
-    stopSpeaking();
+    recognitionPausedRef.current = false;
+    stopAllTimers();
   };
 
+  // Text-to-speech functions
   const stopSpeaking = () => {
     if (synthRef.current?.speaking) {
       synthRef.current.cancel();
     }
     setSpeakingMessageId(null);
+    setIsProcessing(false);
   };
 
   const speakMessage = (message) => {
-    if (!ttsSupported || !synthRef.current) return;
+    if (!ttsSupported || !synthRef.current) {
+      setIsProcessing(false);
+      return;
+    }
+
+    // Stop any current speech and pause recognition
     stopSpeaking();
+    pauseRecognitionForSpeech();
+
     const utterance = new SpeechSynthesisUtterance(message.text);
     utterance.lang = "en-US";
     utterance.pitch = 1;
     utterance.rate = 1;
-    utterance.onstart = () => setSpeakingMessageId(message.id);
-    utterance.onend = () => setSpeakingMessageId((prev) => (prev === message.id ? null : prev));
-    utterance.onerror = () => setSpeakingMessageId(null);
+    
+    // Mark as speaking and update UI
+    setSpeakingMessageId(message.id);
+    
+    // Clean up and resume recognition when done
+    const onEnd = () => {
+      setSpeakingMessageId(null);
+      setIsProcessing(false);
+      // Small delay before resuming recognition
+      setTimeout(resumeRecognitionAfterSpeech, 500);
+    };
+    
+    utterance.onend = onEnd;
+    utterance.onerror = (event) => {
+      console.error('SpeechSynthesis error:', event);
+      onEnd();
+    };
+    
+    // Store and speak the utterance
     utteranceRef.current = utterance;
     synthRef.current.speak(utterance);
   };
 
-  const handleReplay = (message) => {
-    speakMessage(message);
+  const pauseRecognitionForSpeech = () => {
+    if (!callActiveRef.current || recognitionPausedRef.current) return;
+    
+    recognitionPausedRef.current = true;
+    try {
+      if (recognitionRef.current) {
+        recognitionRef.current.onend = null;
+        recognitionRef.current.stop();
+      }
+    } catch (e) {
+      console.error('Error pausing recognition:', e);
+    }
   };
 
+  const resumeRecognitionAfterSpeech = () => {
+    if (!callActiveRef.current || speakingMessageId) return;
+    
+    recognitionPausedRef.current = false;
+    
+    // Clear any pending timeouts to prevent multiple restarts
+    if (resumeTimeoutRef.current) {
+      clearTimeout(resumeTimeoutRef.current);
+    }
+    
+    resumeTimeoutRef.current = setTimeout(() => {
+      try {
+        if (recognitionRef.current && !speakingMessageId) {
+          // Set up the onend handler
+          recognitionRef.current.onend = () => {
+            setListening(false);
+            const spoken = (capturedSpeechRef.current || "").trim();
+            capturedSpeechRef.current = "";
+            if (spoken && !speakingMessageId && !isProcessing) {
+              handleTranscript(spoken);
+            } else {
+              setInterimText("");
+            }
+            // Don't auto-restart here, let the silence timer handle it
+          };
+          
+          // Start recognition if not already active
+          if (!listening) {
+            recognitionRef.current.start();
+          }
+        }
+      } catch (e) {
+        console.error('Error resuming recognition:', e);
+        if (callActiveRef.current && !speakingMessageId) {
+          resumeTimeoutRef.current = setTimeout(resumeRecognitionAfterSpeech, 500);
+        }
+      }
+    }, 500); // Slightly longer delay to ensure clean state
+  };
+
+  // Message handling
   const sendMessage = async (text) => {
+    if (!text.trim() || isProcessing) return;
+    
     setError("");
     const userMessage = { id: createId(), role: "user", text };
-    setMessages((prev) => [...prev, userMessage]);
-
-    const payloadHistory = [...messagesRef.current, userMessage].map((msg) => ({
-      role: msg.role,
-      content: msg.text,
-    }));
-
+    setMessages(prev => [...prev, userMessage]);
+    setInterimText("");
     setLoadingReply(true);
+    setIsProcessing(true);
+
+    // Abort any pending requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     try {
       const response = await fetch(`${API_BASE}/voice_chat/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: payloadHistory,
+          messages: [{ role: "user", content: text }],
           user_name: user?.displayName || user?.email || undefined,
         }),
+        signal: abortControllerRef.current.signal
       });
 
       if (!response.ok) {
-        throw new Error("The AI coach could not respond right now.");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || "The AI coach could not respond right now.");
       }
 
       const data = await response.json();
-      const replyText = (data.reply || "I'm having trouble responding at the moment.").trim();
-      const aiMessage = { id: createId(), role: "assistant", text: replyText };
-      setMessages((prev) => [...prev, aiMessage]);
-      speakMessage(aiMessage);
+      const replyText = data.reply || "I'm having trouble responding at the moment.";
+      
+      const aiMessage = { 
+        id: createId(), 
+        role: "assistant", 
+        text: replyText
+      };
+      
+      setMessages(prev => [...prev, aiMessage]);
+      
     } catch (err) {
-      setError(
-        err.message ||
-          "Something went wrong reaching the AI coach. Please check the server and try again."
-      );
-      setMessages((prev) => [
+      if (err.name === 'AbortError') {
+        console.log('Request was aborted');
+        return;
+      }
+      
+      console.error('Error sending message:', err);
+      setError(err.message || "Something went wrong. Please try again.");
+      
+      setMessages(prev => [
         ...prev,
         {
           id: createId(),
           role: "assistant",
-          text: "I couldn't reach our AI coach just now. Let's try again in a moment.",
-        },
+          text: "I'm having trouble connecting to the AI coach. Please try again in a moment.",
+        }
       ]);
     } finally {
       setLoadingReply(false);
+      setIsProcessing(false);
     }
   };
 
+  // UI helper functions
+  const handleReplay = (message) => {
+    if (!isProcessing && !speakingMessageId) {
+      // Allow replaying any message, not just the last one
+      speakMessage(message);
+    }
+  };
+
+  const handleResetConversation = () => {
+    stopSpeaking();
+    setMessages([
+      {
+        id: createId(),
+        role: "assistant",
+        text: "Hi! I'm your English practice partner. Start speaking and I'll help you improve!",
+      },
+    ]);
+    setError("");
+  };
+
   const handleExit = () => {
+    // Abort any pending requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
     stopSpeaking();
     endCall();
     navigate("/");
   };
 
+  // UI rendering
+  const micStateClass = speakingMessageId
+    ? "speaking"
+    : callActive && listening
+    ? "listening"
+    : callActive
+    ? "connected"
+    : "idle";
+
   return (
     <div className="voice-practice-page">
-      <header className="voice-header">
-        <button className="ghost-btn" onClick={handleExit}>
-          <ArrowLeft size={18} />
-          Back to Dashboard
-        </button>
+      <header className="voice-header sticky-controls">
+        <div className="control-bar">
+          <button className="ghost-btn" onClick={handleExit}>
+            <ArrowLeft size={18} />
+            Back to Dashboard
+          </button>
+          <button className="ghost-btn" onClick={handleResetConversation}>
+            <RotateCcw size={18} />
+            Reset Chat
+          </button>
+          <button
+            className="ghost-btn danger"
+            onClick={endCall}
+            disabled={!callActive}
+          >
+            <MicOff size={18} />
+            End Call
+          </button>
+        </div>
         <div className="voice-status">
           <span className={`status ${callActive ? "live" : "idle"}`}>
-            {callActive ? (listening ? "Listening live…" : "Call active") : "Call idle"}
+            {callActive ? (listening ? "Listening..." : "Call active") : "Call idle"}
           </span>
-          {loadingReply && <span className="status thinking">AI responding…</span>}
+          {loadingReply && <span className="status thinking">AI responding...</span>}
           {!speechSupported && <span className="status warning">Speech recognition unavailable</span>}
         </div>
-        <button className="ghost-btn" onClick={() => setMessages([
-          {
-            id: createId(),
-            role: "assistant",
-            text: greeting,
-          },
-        ])}>
-          <RotateCcw size={18} />
-          Reset Chat
-        </button>
       </header>
 
       <main className="voice-body">
@@ -336,6 +570,7 @@ const VoicePractice = ({ user }) => {
                       type="button"
                       onClick={() => handleReplay(msg)}
                       aria-label="Replay response"
+                      disabled={isProcessing}
                     >
                       <Volume2 size={16} />
                       Replay
@@ -349,7 +584,7 @@ const VoicePractice = ({ user }) => {
             {interimText && (
               <article className="voice-message user ghost">
                 <div className="message-meta">
-                  <span>Listening…</span>
+                  <span>Listening...</span>
                 </div>
                 <p>{interimText}</p>
               </article>
@@ -360,7 +595,7 @@ const VoicePractice = ({ user }) => {
                 <div className="message-meta">
                   <span>TalkBuddy</span>
                 </div>
-                <p>Thinking of a response…</p>
+                <p>Thinking of a response...</p>
               </article>
             )}
           </div>
@@ -374,27 +609,40 @@ const VoicePractice = ({ user }) => {
           </div>
         )}
         <div className="call-controls">
-          {!callActive ? (
-            <button
-              className="call-btn start"
-              onClick={startCall}
-              disabled={!speechSupported || callConnecting}
-            >
-              {callConnecting ? <Loader2 size={20} className="spin" /> : <Mic size={22} />}
-              {callConnecting ? "Connecting…" : "Start Call"}
-            </button>
-          ) : (
-            <button className="call-btn end" onClick={endCall}>
-              <MicOff size={22} />
-              End Call
-            </button>
-          )}
-          <div className="mic-hint">
-            {speechSupported
-              ? callActive
-                ? "Speak anytime — we'll capture it automatically."
-                : "Start the call to begin hands-free practice."
-              : "Upgrade to a browser that supports the Web Speech API for voice practice."}
+          <div className={`mic-orb ${micStateClass}`}>
+            <span className="mic-icon">
+              {speakingMessageId ? <Volume2 size={18} /> : <Mic size={18} />}
+            </span>
+            <span className="mic-ring ring-1" />
+            <span className="mic-ring ring-2" />
+          </div>
+          <div className="call-cta">
+            {!callActive ? (
+              <button
+                className="call-btn start"
+                onClick={startCall}
+                disabled={!speechSupported || callConnecting || isProcessing}
+              >
+                {callConnecting ? <Loader2 size={20} className="spin" /> : <Mic size={22} />}
+                {callConnecting ? "Connecting..." : "Start Call"}
+              </button>
+            ) : (
+              <button 
+                className="call-btn end" 
+                onClick={endCall}
+                disabled={isProcessing}
+              >
+                <MicOff size={22} />
+                End Call
+              </button>
+            )}
+            <div className="mic-hint">
+              {speechSupported
+                ? callActive
+                  ? "Speak naturally — I'll respond when you're done."
+                  : "Click Start Call to begin practicing"
+                : "Your browser doesn't support speech recognition. Try Chrome or Edge."}
+            </div>
           </div>
         </div>
 
@@ -409,4 +657,3 @@ const VoicePractice = ({ user }) => {
 };
 
 export default VoicePractice;
-
