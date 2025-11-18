@@ -1,8 +1,30 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, getDocs, addDoc } from "firebase/firestore";
+import { collection, getDocs, addDoc, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "./firebase";
 import "./OralQuestion.css";
+
+const MAX_SCORE_PER_QUESTION = 10;
+
+const calculateOralStats = (scores = [], totalQuestions = 0) => {
+  const aggregate = scores.reduce((sum, entry) => sum + (Number(entry.score) || 0), 0);
+  const normalizedScore = Number(aggregate.toFixed(1));
+  const percentage = totalQuestions > 0
+    ? Math.round((normalizedScore / (totalQuestions * MAX_SCORE_PER_QUESTION)) * 100)
+    : 0;
+
+  return {
+    normalizedScore,
+    totalQuestions,
+    percentage
+  };
+};
+
+const determineLevelFromPercentage = (percentage) => {
+  if (percentage >= 80) return "ADVANCED";
+  if (percentage >= 55) return "INTERMEDIATE";
+  return "BASIC";
+};
 
 // Helper function to extract keywords from text
 const extractKeywords = (text) => {
@@ -30,6 +52,7 @@ function OralQuestion({ user, userProfile, refreshUserProfile }) {
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [error, setError] = useState("");
   const [scores, setScores] = useState([]);
+  const [isFinalizing, setIsFinalizing] = useState(false);
   const recognitionRef = useRef(null);
   const navigate = useNavigate();
 
@@ -297,7 +320,100 @@ function OralQuestion({ user, userProfile, refreshUserProfile }) {
     }
   };
 
-  const nextQuestion = () => {
+  const getQuizStats = () => {
+    const quizScore = userProfile?.quizScore ?? 0;
+    const quizTotalQuestions = userProfile?.quizTotalQuestions ?? 0;
+    const quizPercentage =
+      userProfile?.quizPercentage ??
+      (quizTotalQuestions > 0 ? Math.round((quizScore / quizTotalQuestions) * 100) : 0);
+
+    return {
+      quizScore,
+      quizTotalQuestions,
+      quizPercentage
+    };
+  };
+
+  const finalizeAssessment = async () => {
+    if (!user?.uid) {
+      navigate("/", { replace: true });
+      return;
+    }
+
+    const { normalizedScore, percentage: oralTestPercentage } = calculateOralStats(
+      scores,
+      questions.length
+    );
+
+    const oralTestTotalQuestions = questions.length;
+    const quizStats = getQuizStats();
+    const hasQuizData = Boolean(userProfile?.quizCompleted) && quizStats.quizTotalQuestions > 0;
+    const combinedPercentage = hasQuizData
+      ? Math.round((quizStats.quizPercentage + oralTestPercentage) / 2)
+      : oralTestPercentage;
+    const assessmentLevel = determineLevelFromPercentage(combinedPercentage);
+
+    const now = new Date();
+    const assessmentCompletedAtReadable = new Intl.DateTimeFormat("en-GB", {
+      dateStyle: "long",
+      timeStyle: "medium"
+    }).format(now);
+
+    const createdAtNumeric = typeof userProfile?.createdAt === "number"
+      ? userProfile.createdAt
+      : userProfile?.createdAt?.toMillis?.()
+        ? userProfile.createdAt.toMillis()
+        : Date.now();
+
+    const payload = {
+      assessmentCompleted: true,
+      assessmentCompletedAt: assessmentCompletedAtReadable,
+      assessmentCompletedAtTs: serverTimestamp(),
+      assessmentLevel,
+      assessmentOverallPercentage: combinedPercentage,
+      oralTestCompleted: true,
+      oralTestScore: normalizedScore,
+      oralTestTotalQuestions,
+      oralTestTotalPossible: oralTestTotalQuestions * MAX_SCORE_PER_QUESTION,
+      oralTestPercentage,
+      oralTestLastUpdatedAt: serverTimestamp(),
+      quizCompleted: true,
+      quizScore: quizStats.quizScore,
+      quizTotalQuestions: quizStats.quizTotalQuestions,
+      quizPercentage: quizStats.quizPercentage,
+      email: user?.email || userProfile?.email || "",
+      goal: userProfile?.goal || "",
+      name: userProfile?.name || user?.displayName || "",
+      uid: user?.uid,
+      createdAt: createdAtNumeric,
+      updatedAt: serverTimestamp()
+    };
+
+    setIsFinalizing(true);
+    setError("");
+
+    try {
+      await setDoc(doc(db, "users", user.uid), payload, { merge: true });
+      if (typeof refreshUserProfile === "function") {
+        await refreshUserProfile();
+      }
+      navigate("/", {
+        replace: true,
+        state: {
+          assessmentLevel,
+          oralTestPercentage,
+          combinedPercentage
+        }
+      });
+    } catch (err) {
+      console.error("Failed to finalize assessment:", err);
+      setError("We saved your answers, but updating your profile failed. Please try again.");
+    } finally {
+      setIsFinalizing(false);
+    }
+  };
+
+  const nextQuestion = async () => {
     setTranscript("");
     setEvaluation(null);
     setError("");
@@ -306,17 +422,7 @@ function OralQuestion({ user, userProfile, refreshUserProfile }) {
     if (currentIndex < questions.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
-      // All questions completed – go back to main Home dashboard
-      const totalScore = scores.reduce((sum, s) => sum + s.score, 0);
-      navigate("/", {
-        replace: true,
-        state: {
-          scores,
-          questions,
-          totalScore: Math.round((totalScore / (questions.length * 10)) * 100),
-          maxPossibleScore: 100
-        }
-      });
+      await finalizeAssessment();
     }
   };
 
@@ -331,7 +437,7 @@ function OralQuestion({ user, userProfile, refreshUserProfile }) {
   }
 
   const currentQuestion = questions[currentIndex];
-  const totalScore = scores.reduce((sum, s) => sum + s.score, 0);
+  const totalScore = scores.reduce((sum, s) => sum + (Number(s.score) || 0), 0);
 
   return (
     <div className="oq-container">
@@ -449,9 +555,13 @@ function OralQuestion({ user, userProfile, refreshUserProfile }) {
                 <button 
                   className="btn btn-next" 
                   onClick={nextQuestion}
-                  disabled={isEvaluating}
+                  disabled={isEvaluating || isFinalizing}
                 >
-                  {currentIndex < questions.length - 1 ? "Next Question →" : "Finish Test"}
+                  {currentIndex < questions.length - 1
+                    ? "Next Question →"
+                    : isFinalizing
+                      ? "Saving results..."
+                      : "Finish Test"}
                 </button>
               </div>
             </div>

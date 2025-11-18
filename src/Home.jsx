@@ -16,6 +16,18 @@ export default function Home({ user, userProfile }) {
   useAuthValidation(user, ['/']);
   const handleLogout = useSecureLogout(() => signOut(auth));
 
+  const scrollToSection = (sectionId) => {
+    const target = document.getElementById(sectionId);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const handleNavScroll = (event, sectionId) => {
+    event.preventDefault();
+    scrollToSection(sectionId);
+  };
+
   const handleProfileClick = (e) => {
     e.preventDefault();
     if (user) {
@@ -32,19 +44,41 @@ export default function Home({ user, userProfile }) {
     }
   };
 
+  const quizPercentage = userProfile?.quizPercentage || 0;
+  const quizScore = userProfile?.quizScore || 0;
+  const quizTotalQuestions = userProfile?.quizTotalQuestions || 0;
+  const oralTestPercentage = userProfile?.oralTestPercentage || 0;
+  const oralTestScore = userProfile?.oralTestScore || 0;
+  const oralTestTotalQuestions = userProfile?.oralTestTotalQuestions || 0;
+  const oralTestMaxScore =
+    userProfile?.oralTestTotalPossible ||
+    (oralTestTotalQuestions ? oralTestTotalQuestions * 10 : 0);
+  const availablePercentages = [];
+  if (quizTotalQuestions) availablePercentages.push(quizPercentage);
+  if (oralTestTotalQuestions) availablePercentages.push(oralTestPercentage);
+  const computedOverallPercentage = availablePercentages.length
+    ? Math.round(
+        availablePercentages.reduce((sum, value) => sum + value, 0) /
+          availablePercentages.length
+      )
+    : 0;
+  const overallPercentage = userProfile?.assessmentOverallPercentage ?? computedOverallPercentage;
+  const placementLevel = userProfile?.assessmentLevel;
+  const assessmentCompletedAt = userProfile?.assessmentCompletedAt;
+
   return (
-    <div className="home">
+    <div className="home" id="home-top">
       <header className="topnav">
         <div className="logo"> 
           <div className="logo-mark">TB</div>
           <span className="logo-text">TalkBuddy AI</span>
         </div>
         <nav className="menu">
-          <Link to="/">Home</Link>
-          <a href="#features">Features</a>
-          <a href="#progress">Progress</a>
+          <a href="#home-top" onClick={(e) => handleNavScroll(e, 'home-top')}>Home</a>
+          <a href="#features" onClick={(e) => handleNavScroll(e, 'features')}>Features</a>
+          <a href="#progress" onClick={(e) => handleNavScroll(e, 'progress')}>Progress</a>
           <a href="#profile" onClick={handleProfileClick}>Profile</a>
-          <a href="#settings">Settings</a>
+          <a href="#settings" onClick={(e) => handleNavScroll(e, 'settings')}>Settings</a>
           {user ? (
             <button className="logout" onClick={handleLogout}>Logout</button>
           ) : (
@@ -61,7 +95,11 @@ export default function Home({ user, userProfile }) {
             <span>Welcome back!</span>
           </div>
           <h1>Hi {user?.displayName || (user?.email ? user.email.split('@')[0] : 'there')} 👋</h1>
-          <p className="hero-subtitle">Ready to practice your English today? Your AI coach is waiting!</p>
+          <p className="hero-subtitle">
+            {placementLevel
+              ? `You're currently at the ${placementLevel} level. Keep up the great work!`
+              : "Ready to practice your English today? Your AI coach is waiting!"}
+          </p>
           <div className="cta-group">
             <button className="cta voice" onClick={() => navigate("/voice-practice")}>
               <span className="cta-icon">🎙️</span>
@@ -85,25 +123,30 @@ export default function Home({ user, userProfile }) {
       {userProfile?.assessmentCompleted && (
         <section className="assessment-results" aria-labelledby="assessment-results">
           <h2 id="assessment-results">Your Assessment Results 📊</h2>
+          {assessmentCompletedAt && (
+            <p className="results-timestamp">
+              Completed on <strong>{assessmentCompletedAt}</strong>
+            </p>
+          )}
           <div className="results-grid">
             <div className="result-card quiz-results">
               <div className="result-header">
                 <h3>Written Test</h3>
                 <div className="result-score">
-                  {userProfile.quizScore || 0}/{userProfile.quizTotalQuestions || 0}
-                  <span className="result-percentage">({userProfile.quizPercentage || 0}%)</span>
+                  {quizScore}/{quizTotalQuestions}
+                  <span className="result-percentage">({quizPercentage}%)</span>
                 </div>
               </div>
               <div className="result-details">
                 <div className="result-bar">
                   <div 
                     className="result-progress" 
-                    style={{ width: `${userProfile.quizPercentage || 0}%` }}
+                    style={{ width: `${quizPercentage}%` }}
                   ></div>
                 </div>
                 <p className="result-description">
-                  {userProfile.quizPercentage >= 80 ? "Excellent performance!" : 
-                   userProfile.quizPercentage >= 60 ? "Good work! Keep practicing." : 
+                  {quizPercentage >= 80 ? "Excellent performance!" : 
+                   quizPercentage >= 60 ? "Good work! Keep practicing." : 
                    "Room for improvement. Practice more!"}
                 </p>
               </div>
@@ -113,20 +156,20 @@ export default function Home({ user, userProfile }) {
               <div className="result-header">
                 <h3>Oral Test</h3>
                 <div className="result-score">
-                  {userProfile.oralTestScore || 0}/{userProfile.oralTestTotalQuestions * 10 || 0}
-                  <span className="result-percentage">({userProfile.oralTestPercentage || 0}%)</span>
+                  {oralTestScore}/{oralTestMaxScore}
+                  <span className="result-percentage">({oralTestPercentage}%)</span>
                 </div>
               </div>
               <div className="result-details">
                 <div className="result-bar">
                   <div 
                     className="result-progress" 
-                    style={{ width: `${userProfile.oralTestPercentage || 0}%` }}
+                    style={{ width: `${oralTestPercentage}%` }}
                   ></div>
                 </div>
                 <p className="result-description">
-                  {userProfile.oralTestPercentage >= 80 ? "Outstanding speaking skills!" : 
-                   userProfile.oralTestPercentage >= 60 ? "Good pronunciation and fluency!" : 
+                  {oralTestPercentage >= 80 ? "Outstanding speaking skills!" : 
+                   oralTestPercentage >= 60 ? "Good pronunciation and fluency!" : 
                    "Keep practicing speaking to improve!"}
                 </p>
               </div>
@@ -136,25 +179,42 @@ export default function Home({ user, userProfile }) {
               <div className="result-header">
                 <h3>Overall Assessment</h3>
                 <div className="result-score">
-                  {Math.round(((userProfile.quizPercentage || 0) + (userProfile.oralTestPercentage || 0)) / 2)}%
+                  {overallPercentage}%
                 </div>
               </div>
               <div className="result-details">
                 <div className="result-bar">
                   <div 
                     className="result-progress overall-progress" 
-                    style={{ width: `${Math.round(((userProfile.quizPercentage || 0) + (userProfile.oralTestPercentage || 0)) / 2)}%` }}
+                    style={{ width: `${overallPercentage}%` }}
                   ></div>
                 </div>
                 <p className="result-description">
-                  {Math.round(((userProfile.quizPercentage || 0) + (userProfile.oralTestPercentage || 0)) / 2) >= 80 ? 
+                  {overallPercentage >= 80 ? 
                     "🎉 Excellent overall performance! You're ready for advanced practice!" :
-                    Math.round(((userProfile.quizPercentage || 0) + (userProfile.oralTestPercentage || 0)) / 2) >= 60 ?
+                    overallPercentage >= 60 ?
                     "👍 Good progress! Continue practicing to improve further." :
                     "💪 Keep practicing! Every step forward counts."}
                 </p>
               </div>
             </div>
+
+            {placementLevel && (
+              <div className="result-card level-results">
+                <div className="result-header">
+                  <h3>Placement Level</h3>
+                  <div className="result-score level-tag">{placementLevel}</div>
+                </div>
+                <div className="result-details">
+                  <p className="result-description">
+                    Determined using both written and oral scores so we can recommend the right routines for you.
+                  </p>
+                  <p className="result-description subtle">
+                    Combined score: {overallPercentage}% &nbsp;|&nbsp; Oral score: {oralTestPercentage}% &nbsp;|&nbsp; Quiz score: {quizPercentage}%
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -213,7 +273,7 @@ export default function Home({ user, userProfile }) {
         </div>
       </section>
 
-      <section className="motivation" aria-labelledby="motivation">
+      <section className="motivation" aria-labelledby="motivation" id="settings">
         <h2 id="motivation">Tip of the Day</h2>
         <blockquote className="card quote">
           "Small, consistent practice beats occasional perfection. Show up today."

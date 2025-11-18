@@ -1,6 +1,6 @@
 import './App.css'
 import './AdminDashboard.css'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { onAuthStateChanged, sendEmailVerification } from 'firebase/auth'
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
@@ -24,7 +24,7 @@ function App() {
 
   // 🔹 Refresh user profile
   //poorav commit
-  const refreshUserProfile = async () => {
+  const refreshUserProfile = useCallback(async () => {
     if (!user) return
     try {
       const snap = await getDoc(doc(db, "users", user.uid))
@@ -40,7 +40,7 @@ function App() {
       console.error("Error refreshing profile:", err)
       setUserProfile(null)
     }
-  }
+  }, [user])
 
   const recordLastLogin = async (uid) => {
     if (!uid) return
