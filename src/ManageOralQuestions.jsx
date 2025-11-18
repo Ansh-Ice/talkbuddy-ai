@@ -40,43 +40,55 @@ const ManageOralQuestions = () => {
   };
 
   const startEditing = (question) => {
-    setEditingId(question.id);
-    setFormState({
-      prompt: question.prompt || '',
-      type: question.type || '',
-      skill_tested: question.skill_tested || ''
-    });
-    setStatus(null);
-  };
+  setEditingId(question.id);
+  setFormState({
+    prompt: question.prompt || '',
+    type: question.type || '',
+    skill_tested: Array.isArray(question.skill_tested)
+      ? question.skill_tested.join(", ") 
+      : question.skill_tested || ''
+  });
+  setStatus(null);
+};
+
 
   const cancelEditing = () => {
     setEditingId(null);
     setFormState({ prompt: '', type: '', skill_tested: '' });
   };
 
-  const handleUpdate = async (event) => {
-    event.preventDefault();
-    if (!formState.prompt.trim() || !formState.type.trim() || !formState.skill_tested.trim()) {
-      setStatus({ type: 'error', message: 'Prompt, type, and skill tested are required.' });
-      return;
-    }
+const handleUpdate = async (event) => {
+  event.preventDefault();
 
-    try {
-      await updateDoc(doc(db, 'OralQuestions', editingId), {
-        prompt: formState.prompt.trim(),
-        type: formState.type.trim(),
-        skill_tested: formState.skill_tested.trim(),
-        updatedAt: serverTimestamp()
-      });
-      setStatus({ type: 'success', message: 'Question updated successfully.' });
-      setEditingId(null);
-      setFormState({ prompt: '', type: '', skill_tested: '' });
-      await loadQuestions();
-    } catch (error) {
-      console.error('Failed to update oral question', error);
-      setStatus({ type: 'error', message: 'Could not update the question. Please try again.' });
-    }
-  };
+  if (!formState.prompt.trim() || !formState.type.trim() || !formState.skill_tested.trim()) {
+    setStatus({ type: 'error', message: 'Prompt, type, and skill tested are required.' });
+    return;
+  }
+
+  try {
+    const skillArray = formState.skill_tested
+      .split(',')
+      .map(item => item.trim())
+      .filter(item => item !== '');
+
+    await updateDoc(doc(db, 'OralQuestions', editingId), {
+      prompt: formState.prompt.trim(),
+      type: formState.type.trim(),
+      skill_tested: skillArray,     // <-- FIXED
+      updatedAt: serverTimestamp()
+    });
+
+    setStatus({ type: 'success', message: 'Question updated successfully.' });
+    setEditingId(null);
+    setFormState({ prompt: '', type: '', skill_tested: '' });
+    await loadQuestions();
+
+  } catch (error) {
+    console.error('Failed to update oral question', error);
+    setStatus({ type: 'error', message: 'Could not update the question. Please try again.' });
+  }
+};
+
 
   const handleAddQuestion = async (event) => {
     event.preventDefault();
@@ -87,12 +99,16 @@ const ManageOralQuestions = () => {
     try {
       setSaving(true);
       await addDoc(collection(db, 'OralQuestions'), {
-        prompt: addForm.prompt.trim(),
-        type: addForm.type.trim(),
-        skill_tested: addForm.skill_tested.trim(),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+      prompt: addForm.prompt.trim(),
+      type: addForm.type.trim(),
+      skill_tested: addForm.skill_tested
+      .split(',')
+      .map(item => item.trim())
+      .filter(item => item !== ''),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
       });
+
       setStatus({ type: 'success', message: 'New oral question added.' });
       setAddForm({ prompt: '', type: '', skill_tested: '' });
       setShowAddForm(false);
@@ -187,6 +203,7 @@ const ManageOralQuestions = () => {
                   onChange={(e) => setAddForm({ ...addForm, type: e.target.value })}
                   placeholder="e.g. fluency, pronunciation"
                   required
+                  style={{ color: "black" }}
                 />
               </div>
               <div className="form-group">
@@ -197,6 +214,7 @@ const ManageOralQuestions = () => {
                   onChange={(e) => setAddForm({ ...addForm, skill_tested: e.target.value })}
                   placeholder="e.g. communication"
                   required
+                  style={{ color: "black" }}
                 />
               </div>
             </div>
@@ -294,7 +312,11 @@ const ManageOralQuestions = () => {
                   </div>
                   <div className="oral-card-type secondary">
                     <span>Skill Tested</span>
-                    <strong>{question.skill_tested || 'Not captured'}</strong>
+                    <strong>
+                      {Array.isArray(question.skill_tested)
+                      ? question.skill_tested.join(", ")
+                      : question.skill_tested || "Not captured"}
+                    </strong>
                   </div>
                 </>
               )}
