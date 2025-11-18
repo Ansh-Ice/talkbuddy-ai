@@ -21,6 +21,43 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.aiquiz-container::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+  animation: rotate 30s linear infinite;
+  z-index: 0;
+}
+
+.aiquiz-container::after {
+  content: '';
+  position: absolute;
+  bottom: -30%;
+  right: -30%;
+  width: 800px;
+  height: 800px;
+  background: radial-gradient(circle, rgba(240, 147, 251, 0.15) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: float-slow 25s ease-in-out infinite;
+  z-index: 0;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes float-slow {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-50px, -50px) scale(1.1); }
 }
 
 /* Card Styles */
@@ -28,11 +65,19 @@
   width: 100%;
   max-width: 900px;
   background: var(--card);
-  border-radius: 20px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
-  padding: 30px;
-  backdrop-filter: blur(10px) saturate(120%);
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 24px;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.9);
+  padding: 35px;
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  position: relative;
+  z-index: 1;
+  transition: all 0.4s ease;
+}
+
+.aiquiz-card:hover {
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 1);
+  transform: translateY(-5px);
 }
 
 /* Header Styles */
@@ -57,28 +102,61 @@
 
 .question-type-badge {
   display: inline-block;
-  padding: 6px 14px;
-  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+  padding: 8px 18px;
+  background: linear-gradient(135deg, var(--accent-1), var(--accent-2), #f093fb);
   color: white;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.25);
+  border-radius: 25px;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.question-type-badge::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  transform: rotate(45deg);
+  transition: all 0.5s ease;
+}
+
+.question-type-badge:hover {
+  transform: scale(1.1);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.question-type-badge:hover::before {
+  left: 100%;
 }
 
 /* Question Styles */
 .question {
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 22px;
+  font-weight: 700;
   color: #2c3e50;
   margin: 25px 0;
-  padding: 20px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(250, 250, 255, 0.8));
-  border-radius: 12px;
-  border-left: 4px solid var(--accent-1);
-  line-height: 1.6;
+  padding: 25px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(250, 250, 255, 0.9));
+  border-radius: 16px;
+  border-left: 6px solid var(--accent-1);
+  line-height: 1.7;
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.question:hover {
+  box-shadow: 0 12px 35px rgba(102, 126, 234, 0.15), inset 0 1px 0 rgba(255, 255, 255, 1);
+  transform: translateX(5px);
 }
 
 /* ==================== MULTIPLE CHOICE STYLES ==================== */
@@ -92,18 +170,19 @@
 .option-btn {
   display: flex;
   align-items: center;
-  padding: 16px 20px;
-  border: 2px solid #e0e0e0;
-  border-radius: 12px;
+  padding: 18px 24px;
+  border: 2px solid rgba(102, 126, 234, 0.2);
+  border-radius: 16px;
   cursor: pointer;
-  background: #fafafa;
-  transition: all 0.3s ease;
-  font-size: 16px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(250, 250, 255, 0.9));
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  font-size: 17px;
   color: #2c3e50;
-  font-weight: 500;
+  font-weight: 600;
   text-align: left;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .option-btn::before {
@@ -112,29 +191,57 @@
   left: 0;
   top: 0;
   height: 100%;
-  width: 4px;
-  background: var(--accent-1);
+  width: 5px;
+  background: linear-gradient(180deg, var(--accent-1), var(--accent-2));
   transform: scaleY(0);
-  transition: transform 0.3s ease;
+  transition: transform 0.4s ease;
+  box-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
+}
+
+.option-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 15px;
+  width: 0;
+  height: 0;
+  background: var(--accent-1);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: all 0.4s ease;
+  opacity: 0;
 }
 
 .option-btn:hover {
   border-color: var(--accent-1);
-  background: linear-gradient(90deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.05));
-  transform: translateX(5px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.12), rgba(118, 75, 162, 0.08));
+  transform: translateX(8px) scale(1.02);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  color: var(--accent-1);
+}
+
+.option-btn:hover::before {
+  transform: scaleY(1);
 }
 
 .option-btn.active {
   border-color: var(--accent-1);
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.1));
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.15));
   color: var(--accent-1);
-  font-weight: 600;
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.2);
+  font-weight: 700;
+  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transform: translateX(10px) scale(1.03);
 }
 
 .option-btn.active::before {
   transform: scaleY(1);
+  width: 6px;
+}
+
+.option-btn.active::after {
+  width: 12px;
+  height: 12px;
+  opacity: 1;
 }
 
 /* ==================== ORAL QUESTION STYLES ==================== */
@@ -310,14 +417,39 @@
 }
 
 .score-display {
-  font-size: 28px;
-  font-weight: 700;
+  font-size: 32px;
+  font-weight: 800;
   color: var(--success);
-  margin: 15px 0;
+  margin: 20px 0;
   text-align: center;
-  padding: 15px;
-  background: rgba(16, 185, 129, 0.1);
-  border-radius: 10px;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(5, 150, 105, 0.08));
+  border-radius: 16px;
+  border: 2px solid rgba(16, 185, 129, 0.2);
+  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  position: relative;
+  overflow: hidden;
+  animation: pulse-score 2s ease-in-out infinite;
+}
+
+.score-display::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.2) 0%, transparent 70%);
+  animation: rotate 10s linear infinite;
+}
+
+@keyframes pulse-score {
+  0%, 100% { 
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  }
+  50% { 
+    box-shadow: 0 12px 35px rgba(16, 185, 129, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  }
 }
 
 .suggestions {
@@ -377,21 +509,61 @@
 }
 
 .generate-btn {
-  padding: 16px 32px;
-  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+  padding: 25px 45px;
+  background: linear-gradient(135deg, #ff6b35, #f7931e);
   color: white;
   border: none;
-  border-radius: 12px;
-  font-size: 18px;
-  font-weight: 600;
+  border-radius: 20px;
+  font-size: 26px;
+  font-weight: 800;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 15px 35px rgba(247, 147, 30, 0.5);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  position: relative;
+  overflow: hidden;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  transform: translateZ(0);
+  border: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.generate-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  transition: 0.5s;
 }
 
 .generate-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+  transform: translateY(-12px) scale(1.05);
+  box-shadow: 0 25px 50px rgba(247, 147, 30, 0.7);
+  border-color: rgba(255, 255, 255, 0.8);
+}
+
+.generate-btn:hover::before {
+  left: 100%;
+}
+
+.generate-btn:active {
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: 0 20px 40px rgba(247, 147, 30, 0.6);
+}
+
+/* Add specific styles for the back to home button */
+.generate-btn[style*="background: linear-gradient(135deg, #6c757d, #5a6268)"] {
+  background: linear-gradient(135deg, #6c757d, #5a6268) !important;
+}
+
+.generate-btn[style*="background: linear-gradient(135deg, #6c757d, #5a6268)"]::before {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
 }
 
 /* ==================== RESULTS SCREEN ==================== */
@@ -406,26 +578,56 @@
 }
 
 .feedback-item {
-  padding: 20px;
-  border-radius: 12px;
-  border: 2px solid #e0e0e0;
-  background: #fafafa;
-  transition: all 0.3s ease;
+  padding: 24px;
+  border-radius: 18px;
+  border: 2px solid rgba(102, 126, 234, 0.2);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(250, 250, 255, 0.9));
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  position: relative;
+  overflow: hidden;
+}
+
+.feedback-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 5px;
+  background: linear-gradient(180deg, var(--accent-1), var(--accent-2));
+  transform: scaleY(0);
+  transition: transform 0.4s ease;
 }
 
 .feedback-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  border-color: rgba(102, 126, 234, 0.4);
+}
+
+.feedback-item:hover::before {
+  transform: scaleY(1);
 }
 
 .feedback-item.correct {
-  background: linear-gradient(180deg, rgba(212, 237, 218, 0.9), rgba(200, 230, 203, 0.8));
+  background: linear-gradient(135deg, rgba(212, 237, 218, 0.95), rgba(200, 230, 203, 0.9));
   border-color: var(--success);
+  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.feedback-item.correct::before {
+  background: linear-gradient(180deg, var(--success), #059669);
 }
 
 .feedback-item.wrong {
-  background: linear-gradient(180deg, rgba(248, 215, 218, 0.9), rgba(245, 198, 203, 0.8));
+  background: linear-gradient(135deg, rgba(248, 215, 218, 0.95), rgba(245, 198, 203, 0.9));
   border-color: var(--error);
+  box-shadow: 0 8px 25px rgba(239, 68, 68, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.feedback-item.wrong::before {
+  background: linear-gradient(180deg, var(--error), #dc2626);
 }
 
 .feedback-item p {
