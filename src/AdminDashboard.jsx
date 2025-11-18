@@ -73,9 +73,9 @@ const AdminDashboard = () => {
 
       // Get users who logged in today (simulate online users)
       const now = Date.now();
-    const twoMinutesAgo = now - 2 * 60 * 1000;
+      const twoMinutesAgo = now - 2 * 60 * 1000;
 
-    const onlineUsersQuery = query(
+      const onlineUsersQuery = query(
       collection(db, "users"),
     where("lastActive", ">=", twoMinutesAgo)
     );
@@ -162,13 +162,13 @@ const AdminDashboard = () => {
         <div className="sidebar-header">
           <div className="admin-brand">
             <Users className="brand-icon" />
-            <h2>Admin Panel</h2>
+            <h2 style={{ color: "black" }}>Admin Panel</h2>
           </div>
           <button
             className="sidebar-toggle mobile-only"
             onClick={() => setSidebarOpen(false)}
           >
-            <X size={24} />
+            {/* <X size={24} /> */}
           </button>
         </div>
 
