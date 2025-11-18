@@ -240,7 +240,7 @@ const AdminReports = ({ data, loading }) => {
       <RecentActivity />
 
       {/* Quick Actions */}
-      <div className="quick-actions">
+      {/* <div className="quick-actions">
         <h3>Quick Actions</h3>
         <div className="actions-grid">
           <button className="action-btn">
@@ -260,7 +260,7 @@ const AdminReports = ({ data, loading }) => {
             <span>Assessment Reports</span>
           </button>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 };

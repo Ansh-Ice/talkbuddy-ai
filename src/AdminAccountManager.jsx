@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { KeyRound, ShieldPlus, AlertCircle, CheckCircle2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { KeyRound, ShieldPlus, AlertCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { db } from './firebase';
 import {
   doc,
@@ -14,6 +15,7 @@ import {
 } from 'firebase/firestore';
 
 const AdminAccountManager = () => {
+  const navigate = useNavigate();
   const [session, setSession] = useState(null);
   const [currentAdmin, setCurrentAdmin] = useState(null);
   const [passwordStatus, setPasswordStatus] = useState(null);
@@ -28,8 +30,18 @@ const AdminAccountManager = () => {
     password: '',
     confirmPassword: ''
   });
+  const [showChangePasswords, setShowChangePasswords] = useState({
+    old: false,
+    new: false,
+    confirm: false
+  });
+  const [showAddPasswords, setShowAddPasswords] = useState({
+    password: false,
+    confirm: false
+  });
   const [changingPassword, setChangingPassword] = useState(false);
   const [creatingAdmin, setCreatingAdmin] = useState(false);
+  const logoutTimerRef = useRef(null);
 
   useEffect(() => {
     const stored = localStorage.getItem('adminSession');
@@ -40,6 +52,14 @@ const AdminAccountManager = () => {
         console.error('Failed to parse admin session', error);
       }
     }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (logoutTimerRef.current) {
+        clearTimeout(logoutTimerRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -111,8 +131,13 @@ const AdminAccountManager = () => {
         updatedAt: serverTimestamp()
       });
       setCurrentAdmin(prev => prev ? { ...prev, password: changeForm.newPassword.trim() } : prev);
-      setPasswordStatus({ type: 'success', message: 'Password updated successfully.' });
+      setPasswordStatus({ type: 'success', message: 'Password updated successfully. Redirecting to login…' });
       setChangeForm({ oldPassword: '', newPassword: '', confirmNewPassword: '' });
+      logoutTimerRef.current = setTimeout(() => {
+        localStorage.removeItem('adminSession');
+        setSession(null);
+        navigate('/auth', { replace: true });
+      }, 1200);
     } catch (error) {
       console.error('Failed to update admin password', error);
       setPasswordStatus({ type: 'error', message: 'Could not update password. Please try again.' });
@@ -211,32 +236,68 @@ const AdminAccountManager = () => {
           <form onSubmit={handleChangePassword} className="account-form">
             <label>
               Old password
-              <input
-                type="password"
-                value={changeForm.oldPassword}
-                onChange={(e) => setChangeForm({ ...changeForm, oldPassword: e.target.value })}
-                required
-              />
+              <div className="password-field">
+                <input
+                  type={showChangePasswords.old ? 'text' : 'password'}
+                  value={changeForm.oldPassword}
+                  onChange={(e) => setChangeForm({ ...changeForm, oldPassword: e.target.value })}
+                  required
+                />
+                <button
+                  type="button"
+                  className="icon-toggle"
+                  onClick={() =>
+                    setShowChangePasswords((prev) => ({ ...prev, old: !prev.old }))
+                  }
+                  aria-label="Toggle old password visibility"
+                >
+                  {showChangePasswords.old ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </label>
             <label>
               New password
-              <input
-                type="password"
-                value={changeForm.newPassword}
-                onChange={(e) => setChangeForm({ ...changeForm, newPassword: e.target.value })}
-                minLength={6}
-                required
-              />
+              <div className="password-field">
+                <input
+                  type={showChangePasswords.new ? 'text' : 'password'}
+                  value={changeForm.newPassword}
+                  onChange={(e) => setChangeForm({ ...changeForm, newPassword: e.target.value })}
+                  minLength={6}
+                  required
+                />
+                <button
+                  type="button"
+                  className="icon-toggle"
+                  onClick={() =>
+                    setShowChangePasswords((prev) => ({ ...prev, new: !prev.new }))
+                  }
+                  aria-label="Toggle new password visibility"
+                >
+                  {showChangePasswords.new ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </label>
             <label>
               Confirm new password
-              <input
-                type="password"
-                value={changeForm.confirmNewPassword}
-                onChange={(e) => setChangeForm({ ...changeForm, confirmNewPassword: e.target.value })}
-                minLength={6}
-                required
-              />
+              <div className="password-field">
+                <input
+                  type={showChangePasswords.confirm ? 'text' : 'password'}
+                  value={changeForm.confirmNewPassword}
+                  onChange={(e) => setChangeForm({ ...changeForm, confirmNewPassword: e.target.value })}
+                  minLength={6}
+                  required
+                />
+                <button
+                  type="button"
+                  className="icon-toggle"
+                  onClick={() =>
+                    setShowChangePasswords((prev) => ({ ...prev, confirm: !prev.confirm }))
+                  }
+                  aria-label="Toggle confirm password visibility"
+                >
+                  {showChangePasswords.confirm ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </label>
             <button type="submit" className="primary-btn" disabled={changingPassword}>
               {changingPassword ? 'Updating...' : 'Update Password'}
@@ -273,23 +334,47 @@ const AdminAccountManager = () => {
             </label>
             <label>
               Password
-              <input
-                type="password"
-                value={addForm.password}
-                onChange={(e) => setAddForm({ ...addForm, password: e.target.value })}
-                minLength={6}
-                required
-              />
+              <div className="password-field">
+                <input
+                  type={showAddPasswords.password ? 'text' : 'password'}
+                  value={addForm.password}
+                  onChange={(e) => setAddForm({ ...addForm, password: e.target.value })}
+                  minLength={6}
+                  required
+                />
+                <button
+                  type="button"
+                  className="icon-toggle"
+                  onClick={() =>
+                    setShowAddPasswords((prev) => ({ ...prev, password: !prev.password }))
+                  }
+                  aria-label="Toggle password visibility"
+                >
+                  {showAddPasswords.password ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </label>
             <label>
               Confirm password
-              <input
-                type="password"
-                value={addForm.confirmPassword}
-                onChange={(e) => setAddForm({ ...addForm, confirmPassword: e.target.value })}
-                minLength={6}
-                required
-              />
+              <div className="password-field">
+                <input
+                  type={showAddPasswords.confirm ? 'text' : 'password'}
+                  value={addForm.confirmPassword}
+                  onChange={(e) => setAddForm({ ...addForm, confirmPassword: e.target.value })}
+                  minLength={6}
+                  required
+                />
+                <button
+                  type="button"
+                  className="icon-toggle"
+                  onClick={() =>
+                    setShowAddPasswords((prev) => ({ ...prev, confirm: !prev.confirm }))
+                  }
+                  aria-label="Toggle confirm password visibility"
+                >
+                  {showAddPasswords.confirm ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </label>
             <button type="submit" className="primary-btn" disabled={creatingAdmin}>
               {creatingAdmin ? 'Creating...' : 'Create Admin'}

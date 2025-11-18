@@ -3,7 +3,7 @@ import './AdminDashboard.css'
 import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { onAuthStateChanged, sendEmailVerification } from 'firebase/auth'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from './firebase'
 import AuthForm from './AuthForm'
 import Home from './Home'
@@ -13,6 +13,7 @@ import OralQuestion from './OralQuestion'
 import AdminDashboard from './AdminDashboard'
 import AIQuiz from './AIQuiz'
 import VoicePractice from './VoicePractice'
+import GuidedRoutine from './GuidedRoutine'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -38,6 +39,17 @@ function App() {
     } catch (err) {
       console.error("Error refreshing profile:", err)
       setUserProfile(null)
+    }
+  }
+
+  const recordLastLogin = async (uid) => {
+    if (!uid) return
+    try {
+      await updateDoc(doc(db, "users", uid), {
+        lastLogin: serverTimestamp()
+      })
+    } catch (err) {
+      console.warn("Unable to update lastLogin:", err)
     }
   }
 
@@ -73,6 +85,7 @@ function App() {
             if (snap.exists()) {
               console.log("User profile found:", snap.data())
               setUserProfile(snap.data())
+              await recordLastLogin(firebaseUser.uid)
             } else {
               console.log("No user profile found → new user")
               setUserProfile(null)
@@ -235,6 +248,16 @@ function App() {
         element={
           user ? (
             <VoicePractice user={user} />
+          ) : (
+            <Navigate to="/auth" replace />
+          )
+        }
+      />
+      <Route
+        path="/guided/:routineId"
+        element={
+          user ? (
+            <GuidedRoutine user={user} />
           ) : (
             <Navigate to="/auth" replace />
           )
