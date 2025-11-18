@@ -38,9 +38,55 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# VOICE_CHAT_PROMPT = """
+# You are TalkBuddy, a friendly and encouraging English tutor.
+# Your responses must always be short, natural, and conversational (2–3 sentences maximum).
 
+# For every user message, you must:
+
+# Understand the user’s message and intent.
+
+# Gently include a corrected version of their sentence inside your reply, without labeling it.
+
+# Add one small tip naturally in the flow.
+
+# Keep the tone warm, supportive, and human-like.
+
+# Focus on only one correction per response.
+
+# Keep the conversation moving with a follow-up question.
+
+# Do not use headings like “Correction:” or “Tip:”.
+# Everything should feel like normal, friendly conversation.
+
+# Example 1
+
+# User: "i goes to park yesterday"
+# You: "Oh, you went to the park yesterday? That sounds nice! We use ‘went’ for past actions. Did you go alone or with someone?"
+
+# Example 2
+
+# User: "what time the museum opens"
+# You: "What time does the museum open? That’s a useful question—using ‘does’ makes it sound smoother. Are you planning to visit soon?"
+
+# Voice Interaction Rules
+
+# Responses must be clear and simple for speaking aloud.
+
+# Avoid long explanations or grammar terms.
+
+# Keep everything friendly and easy to follow.
+
+# Your main goals:
+# ✔ Make the learner feel confident
+# ✔ Correct them naturally
+# ✔ Give one small helpful hint
+# ✔ Keep it short and conversational
+# ✔ Encourage them to keep talking
+# """
 # System prompt for Llama
 SYSTEM_PROMPT = """
+
 You are TalkBuddy, an AI English tutor assessing a student's spoken response. Your task is to evaluate the response and provide feedback in a structured JSON format.
 
 For EVERY assessment, follow these steps:
@@ -224,57 +270,76 @@ async def voice_chat(request: ChatRequest):
             None
         )
         
-        if not last_user_message:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No user message found in the conversation"
-            )
+        if not last_user_message or not last_user_message.content.strip():
+            return {
+                "reply": "I didn't catch that. Could you please say that again?",
+                "audio_text": "I didn't catch that. Could you please say that again?"
+            }
         
-        # Prepare messages for the model
-        messages = [
-            SystemMessage(content=SYSTEM_PROMPT),
-            HumanMessage(content=last_user_message.content)
-        ]
+        user_message = last_user_message.content.strip()
+        logger.info(f"Processing message: {user_message[:100]}...")
         
-        logger.info(f"Processing message: {last_user_message.content[:100]}...")
+        # Prepare a simple, direct prompt
+        prompt = f"""
+        You are TalkBuddy, a friendly English tutor. 
+        Your responses must always be short (2–3 sentences) and focus mainly on improving the learner’s English.
+
+        For every user message, you MUST:
+        1. Give the corrected version of the user’s whole sentence, woven naturally into your reply (no labels).
+        2. Continue the conversation with one short question.
+        3. Never exceed 2–3 short sentences total.
+
+        Avoid long explanations, grammar terms, or storytelling. Stay simple, friendly, and conversational.
+
+
+        User said: "{user_message}
+        """
         
-        # Get model response with retry logic
-        max_retries = 3
-        retry_delay = 1
-        
-        for attempt in range(max_retries):
-            try:
-                model = await OllamaService.get_model()
-                response = await model.agenerate([messages])
-                reply = response.generations[0][0].text.strip()
-                
-                # Clean up the response
-                reply = ' '.join(reply.split())  # Normalize whitespace
-                
-                return {
-                    "reply": reply,
-                    "audio_text": reply  # Same text for TTS
-                }
-                
-            except Exception as e:
-                logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(retry_delay * (attempt + 1))
-                continue
-                
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Unable to get a response. Please try again."
-        )
-        
-    except HTTPException:
-        raise
+        try:
+            model = await OllamaService.get_model()
+            if not model:
+                raise Exception("Model not available")
+            
+            # Get response using the model's invoke method
+            response = await model.ainvoke(prompt)
+            
+            # Extract the response text
+            if hasattr(response, 'content'):
+                reply = response.content
+            elif hasattr(response, 'text'):
+                reply = response.text
+            else:
+                reply = str(response)
+            
+            # Clean up the response
+            reply = ' '.join(reply.split()).strip()
+            reply = reply.replace('```', '').replace('**', '').strip()
+            
+            # Ensure we have a valid response
+            if not reply or len(reply) < 2:
+                reply = "I'm not sure how to respond to that. Could you try rephrasing?"
+            
+            logger.info(f"Generated response: {reply}")
+            
+            return {
+                "reply": reply,
+                "audio_text": reply
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting model response: {str(e)}", exc_info=True)
+            return {
+                "reply": "I'm having trouble responding right now. Could you try again in a moment?",
+                "audio_text": "I'm having trouble responding right now. Could you try again in a moment?"
+            }
+            
     except Exception as e:
-        logger.error(f"Error in voice chat: {str(e)}", exc_info=True)
+        logger.error(f"Unexpected error in voice chat: {str(e)}", exc_info=True)
         return {
-            "reply": "I'm having trouble responding right now. Please try again in a moment.",
-            "error": str(e)
+            "reply": "I encountered an error. Let's try that again.",
+            "audio_text": "I encountered an error. Let's try that again."
         }
+
 
 # Quiz evaluation endpoint
 @app.post("/api/oral-quiz/evaluate")
