@@ -202,32 +202,44 @@ const AuthForm = () => {
     }
   }
 
-  async function handleGoogleAuth() {
-    const provider = new GoogleAuthProvider();
-    setIsSubmitting(true);
-    setErrorDialog((s) => ({ ...s, open: false }));
-    try {
-      const cred = await signInWithPopup(auth, provider);
-      // Enforce: only allow Google sign-in if email was registered via our flow
-      const email = (cred.user.email || "").trim().toLowerCase();
-      const regDoc = await getDoc(doc(db, "registeredEmails", email));
-      if (!regDoc.exists()) {
-        // Not allowed: sign the user out and show error with specific code
-        await signOut(auth);
-        throw { code: 'auth/account-not-registered', message: 'This Google account is not registered. Please sign up first with email/password.' };
-      }
-      // Do NOT send verification on login. If not verified, require verification first.
-      if (cred.user.emailVerified) {
-        navigate("/", { replace: true });
-      } else {
-        navigate("/verify-email", { replace: true });
-      }
-    } catch (err) {
-      showError(err);
-    } finally {
-      setIsSubmitting(false);
+async function handleGoogleAuth() {
+  const provider = new GoogleAuthProvider();
+  setIsSubmitting(true);
+  setErrorDialog((s) => ({ ...s, open: false }));
+
+  try {
+    const cred = await signInWithPopup(auth, provider);
+    const email = (cred.user.email || "").trim().toLowerCase();
+
+    // Check if already registered (either via google or email-pass)
+    const regDoc = await getDoc(doc(db, "registeredEmails", email));
+    const userDoc = await getDoc(doc(db, "users", cred.user.uid));
+
+    const isAlreadyRegistered = regDoc.exists() || userDoc.exists();
+
+    if (!isAlreadyRegistered) {
+      // New Google login — block it
+      await signOut(auth);
+      throw {
+        code: 'auth/account-not-registered',
+        message: 'This Google account is not registered. Please sign up using email/password first.'
+      };
     }
+
+    // Existing user → allow login
+    if (cred.user.emailVerified) {
+      navigate("/", { replace: true });
+    } else {
+      navigate("/verify-email", { replace: true });
+    }
+
+  } catch (err) {
+    showError(err);
+  } finally {
+    setIsSubmitting(false);
   }
+}
+
 
   async function handleForgotPassword() {
     if (!email) {
