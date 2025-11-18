@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional, Literal
 from langchain_ollama import ChatOllama
+from fastapi.responses import JSONResponse
 from langchain_core.messages import HumanMessage, SystemMessage
 import json
 import logging
@@ -279,105 +280,126 @@ async def voice_chat(request: ChatRequest):
 @app.post("/api/oral-quiz/evaluate")
 async def evaluate_oral_response(request: QuizEvaluationRequest):
     """Evaluate a user's spoken response to an oral quiz question."""
-    try:
-        if not request.userResponse.strip():
-            return {
-                "score": 0,
-                "correction": None,
-                "feedback": "No response was provided. Please try speaking again.",
-                "suggestions": [
-                    "Make sure to speak clearly into the microphone",
-                    "Try to provide a complete sentence in your response"
-                ]
-            }
-        
-        # Prepare evaluation prompt with clear instructions
-        evaluation_prompt = f"""
-        You are an English language assessment AI. Please evaluate the following response to the question.
-        
-        QUESTION: {request.questionText}
-        STUDENT RESPONSE: {request.userResponse}
-        
-        Provide your evaluation in this exact JSON format:
-        {{
-            "score": 7,  // Score from 1-10 (1=needs work, 10=excellent)
-            "feedback": "Your feedback here. Start positive, mention 1-2 areas for improvement, and be encouraging.",
-            "corrections": [
-                {{
-                    "original": "original text with error",
-                    "corrected": "corrected version",
-                    "explanation": "brief explanation"
-                }}
-            ],
-            "suggestions": [
-                "Specific suggestion 1",
-                "Specific suggestion 2"
-            ],
-            "encouragement": "Motivational closing statement"
-        }}
-        """
-        
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                # Get model response
-                model = await OllamaService.get_model()
-                response = await model.agenerate([
-                    [HumanMessage(content=evaluation_prompt)]
-                ])
-                
-                # Clean and parse the response
-                response_text = response.generations[0][0].text.strip()
-                
-                # Try to extract JSON if there's extra text
-                json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-                if json_match:
-                    response_text = json_match.group(0)
-                
-                evaluation = json.loads(response_text)
-                
-                # Validate and format the response
-                score = min(10, max(1, int(evaluation.get("score", 5))))
-                
-                # Ensure all required fields exist
-                feedback = evaluation.get("feedback", "Thank you for your response!")
-                corrections = evaluation.get("corrections", [])
-                suggestions = evaluation.get("suggestions", [
-                    "Try to speak in complete sentences",
-                    "Practice your pronunciation of difficult words"
-                ])
-                encouragement = evaluation.get("encouragement", "Keep up the good work!")
-                
-                return {
-                    "score": score,
-                    "feedback": feedback,
-                    "corrections": corrections,
-                    "suggestions": suggestions[:3],  # Limit to 3 suggestions
-                    "encouragement": encouragement
-                }
-            except (json.JSONDecodeError, KeyError) as e:
-                logger.error(f"Failed to parse evaluation: {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Failed to parse evaluation response"
-                )
-                
-        except Exception as e:
-            logger.error(f"Evaluation error: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Unable to evaluate response at this time"
-            )
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error in evaluation: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred"
-        )
 
+    from langchain_core.messages import HumanMessage
+    import json, re
+
+    if not request.userResponse.strip():
+        return {
+            "score": 0,
+            "feedback": "No response was provided. Please try speaking again.",
+            "suggestions": [
+                "Make sure to speak clearly into the microphone",
+                "Try to provide a complete sentence in your response"
+            ]
+        }
+
+    # Build evaluation prompt
+    evaluation_prompt = f"""
+    You are an English language assessment AI. Please evaluate the following spoken response.
+
+    QUESTION: {request.questionText}
+    STUDENT RESPONSE: {request.userResponse}
+
+    Respond ONLY with the JSON object in this exact format:
+
+    {{
+        "score": 7,
+        "feedback": "Your feedback here.",
+        "corrections": [
+            {{
+                "original": "text",
+                "corrected": "text",
+                "explanation": "why it is corrected"
+            }}
+        ],
+        "suggestions": [
+            "suggestion 1",
+            "suggestion 2"
+        ],
+        "encouragement": "Closing motivational line."
+    }}
+    """
+
+    max_retries = 3
+
+    for attempt in range(max_retries):
+        try:
+            # Load Ollama model
+            llm = await OllamaService.get_model()
+            if not llm:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Ollama model is not available."
+                )
+
+            # FIXED: agenerate now requires message objects, NOT raw strings
+            messages = [[HumanMessage(content=evaluation_prompt)]]
+
+            response = await llm.agenerate(messages)
+
+            # Extract model response
+            evaluation_text = response.generations[0][0].text
+
+            # Extract JSON segment
+            json_match = re.search(r"\{[\s\S]*\}", evaluation_text)
+            if not json_match:
+                raise ValueError("No JSON found in model output.")
+
+            clean_json = json_match.group(0)
+
+            # Parse JSON
+            evaluation = json.loads(clean_json)
+
+            # Validate essential fields
+            required_fields = ["score", "feedback", "suggestions"]
+            if not all(field in evaluation for field in required_fields):
+                raise ValueError("AI response missing required fields.")
+
+            # Sanitize score (1–10)
+            score = max(1, min(10, int(evaluation.get("score", 5))))
+
+            return {
+                "score": score,
+                "feedback": evaluation.get("feedback", ""),
+                "corrections": evaluation.get("corrections", []),
+                "suggestions": evaluation.get("suggestions", [])[:3],
+                "encouragement": evaluation.get("encouragement", "Great effort! Keep improving!")
+            }
+
+        except Exception as e:
+            logger.error(f"Evaluation error (attempt {attempt + 1}): {str(e)}", exc_info=True)
+
+            if attempt == max_retries - 1:
+                # Final failure
+                raise HTTPException(
+                    status_code=503,
+                    detail="Unable to evaluate your response right now. Please try again."
+                )
+
+            # Retry on next loop
+            continue
+
+    # Should never reach here
+    raise HTTPException(status_code=500, detail="Unexpected evaluation failure.")
+
+# Make sure to add this import at the top of your file
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An internal server error occurred"},
+    )
 # Error handlers
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):
