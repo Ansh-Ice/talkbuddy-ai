@@ -24,6 +24,14 @@ export default function Home({ user, userProfile }) {
       navigate('/auth');
     }
   };
+  const openRoutine = (routineId) => {
+    if (user) {
+      navigate(`/guided/${routineId}`);
+    } else {
+      navigate('/auth');
+    }
+  };
+
   return (
     <div className="home">
       <header className="topnav">
@@ -185,9 +193,9 @@ export default function Home({ user, userProfile }) {
             🧩 Start AI Quiz
           </button>
           <button className="card activity">⚡ Quick 2‑min warmup</button>
-          <button className="card activity">💪 Confidence booster</button>
+          <button className="card activity" onClick={() => openRoutine('confidence-booster')}>💪 Confidence booster</button>
           <button className="card activity">🗣️ Debate practice</button>
-          <button className="card activity">🧘 Breathing & pace</button>
+          <button className="card activity" onClick={() => openRoutine('breathe-peace')}>🧘 Breathe & Peace</button>
         </div>
       </section>
 

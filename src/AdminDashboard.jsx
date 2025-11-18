@@ -72,14 +72,17 @@ const AdminDashboard = () => {
       const totalUsers = usersSnapshot.size;
 
       // Get users who logged in today (simulate online users)
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const onlineUsersQuery = query(
-        collection(db, 'users'),
-        where('lastLogin', '>=', today)
-      );
-      const onlineUsersSnapshot = await getDocs(onlineUsersQuery);
-      const onlineUsers = onlineUsersSnapshot.size;
+      const now = Date.now();
+    const twoMinutesAgo = now - 2 * 60 * 1000;
+
+    const onlineUsersQuery = query(
+      collection(db, "users"),
+    where("lastActive", ">=", twoMinutesAgo)
+    );
+
+    const onlineUsersSnapshot = await getDocs(onlineUsersQuery);
+    const onlineUsers = onlineUsersSnapshot.size;
+
 
       // Get total quizzes (if you have a quizzes collection)
       // const quizzesSnapshot = await getDocs(collection(db, 'quizQuestions'));

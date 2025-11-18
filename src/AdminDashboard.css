@@ -1460,6 +1460,32 @@
   box-shadow: 0 8px 20px rgba(102, 126, 234, 0.35);
 }
 
+.password-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.password-field input {
+  flex: 1;
+}
+
+.icon-toggle {
+  background: rgba(148, 163, 184, 0.2);
+  border: none;
+  border-radius: 8px;
+  padding: 6px;
+  color: #1f2937;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-toggle:hover {
+  background: rgba(148, 163, 184, 0.35);
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .admin-dashboard {

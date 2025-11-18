@@ -95,34 +95,21 @@ export default function ProfileSidebar({ user, isOpen, onClose }) {
 
   // Logout button removed from profile section as per request
 
-  const handleChangePassword = async () => {
-    setIsLoading(true);
-    setError("");
-    setSuccess("");
+const handleChangePassword = async () => {
+  setIsLoading(true);
+  setError("");
+  setSuccess("");
 
-    try {
-      // Send password reset email via backend API
-      const emailResponse = await fetch('http://localhost:8000/send-password-reset', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: user.email
-        })
-      });
+  try {
+    await sendPasswordResetEmail(auth, user.email);
+    setSuccess("Password reset email sent! Check your inbox.");
+  } catch (error) {
+    setError("Failed to send password reset email: " + error.message);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
-      if (!emailResponse.ok) {
-        throw new Error('Failed to send password reset email');
-      }
-
-      setSuccess("Password reset email sent! Please check your email and follow the link to change your password.");
-    } catch (error) {
-      setError("Failed to send password reset email: " + error.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleDeleteProfile = async () => {
     if (!showDeleteConfirm) {
