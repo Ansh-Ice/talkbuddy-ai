@@ -160,6 +160,20 @@ export default function Home({ user, userProfile }) {
                 <div className="cta-subtitle">View past sessions</div>
               </div>
             </button>
+            <button className="cta quiz" onClick={() => navigate("/aiquiz")}>
+              <span className="cta-icon">🧠</span>
+              <div>
+                <div className="cta-title">Start AI Quiz</div>
+                <div className="cta-subtitle">Personalized assessment</div>
+              </div>
+            </button>
+            <button className="cta quiz-history" onClick={() => navigate("/quiz-history")}>
+              <span className="cta-icon">📚</span>
+              <div>
+                <div className="cta-title">View Previous AI Quizzes</div>
+                <div className="cta-subtitle">Review past attempts</div>
+              </div>
+            </button>
           </div>
         </div>
       </section>

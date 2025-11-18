@@ -1,17 +1,85 @@
-import React, { useState } from "react";
-import { addDoc, collection } from "firebase/firestore";
+import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { db } from "./firebase";
 import "./AIQuiz.css";
+import "./OralQuestion.css";
 
 function AIQuiz({ user, userProfile }) {
   const [questions, setQuestions] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [userAnswers, setUserAnswers] = useState([]);
+  const [userAnswers, setUserAnswers] = useState([]); // For MC questions
+  const [oralTranscripts, setOralTranscripts] = useState([]); // For oral questions
+  const [oralEvaluations, setOralEvaluations] = useState([]); // Store oral question evaluations
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [quizId, setQuizId] = useState(null);
+  
+  // Speech recognition state for oral questions
+  const [listening, setListening] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [currentEvaluation, setCurrentEvaluation] = useState(null);
+  const recognitionRef = useRef(null);
+  const navigate = useNavigate();
 
-  // 1️⃣ Generate AI-based Assessment
+  // Initialize speech recognition
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      return; // Speech recognition not available
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+
+    recognition.onstart = () => {
+      setError("");
+    };
+
+    recognition.onresult = (event) => {
+      let newText = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          newText += event.results[i][0].transcript + " ";
+        }
+      }
+      if (newText.trim()) {
+        setTranscript(prev => (prev + " " + newText.trim()).trim());
+      }
+    };
+
+    recognition.onend = () => {
+      if (listening) {
+        setTimeout(() => {
+          if (recognitionRef.current && listening) {
+            try {
+              recognitionRef.current.start();
+            } catch (e) {
+              console.error("Recognition restart failed:", e);
+            }
+          }
+        }, 100);
+      }
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Speech recognition error:", event.error);
+      if (event.error === 'not-allowed') {
+        setError("Microphone access was denied. Please allow microphone access.");
+      }
+    };
+
+    recognitionRef.current = recognition;
+    return () => {
+      recognition.onend = null;
+      recognition.stop();
+    };
+  }, [listening]);
+
+  // Generate AI-based Assessment
   const generateAssessment = async () => {
     if (!user) return alert("Please log in first!");
     setLoading(true);
@@ -23,37 +91,147 @@ function AIQuiz({ user, userProfile }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_id: user.uid,
-          level: userProfile?.level || "beginner",
-          focus: "grammar",
-          type: "custom",
         }),
       });
 
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ detail: "Failed to generate quiz" }));
+        throw new Error(errorData.detail || "Failed to generate assessment");
+      }
+
       const data = await res.json();
-      if (data.questions) {
+      if (data.questions && data.quiz_id) {
         setQuestions(data.questions);
+        setQuizId(data.quiz_id);
         setUserAnswers(Array(data.questions.length).fill(""));
+        setOralTranscripts(Array(data.questions.length).fill(""));
+        setOralEvaluations(Array(data.questions.length).fill(null));
         setCurrentIndex(0);
       } else {
         throw new Error("No questions received.");
       }
     } catch (err) {
-      setError("Failed to generate assessment. Please retry.");
+      setError(err.message || "Failed to generate assessment. Please retry.");
       console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  // 2️⃣ Handle option selection
+  // Handle option selection for MC questions
   const handleSelect = (option) => {
     const updated = [...userAnswers];
     updated[currentIndex] = option;
     setUserAnswers(updated);
   };
 
-  // 3️⃣ Go to next question
+  // Speech recognition controls
+  const startListening = () => {
+    if (recognitionRef.current) {
+      try {
+        setTranscript("");
+        recognitionRef.current.start();
+        setListening(true);
+      } catch (err) {
+        console.error("Error starting speech recognition:", err);
+        setError("Failed to access microphone. Please check permissions.");
+      }
+    }
+  };
+
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setListening(false);
+    }
+  };
+
+  // Submit oral answer and evaluate
+  const submitOralAnswer = async () => {
+    if (!transcript.trim() || isEvaluating) {
+      return;
+    }
+
+    setIsEvaluating(true);
+    setError("");
+    setCurrentEvaluation(null);
+
+    try {
+      const currentQuestion = questions[currentIndex];
+      
+      // Call evaluation API
+      const response = await fetch('http://localhost:8000/api/oral-quiz/evaluate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user?.uid || 'anonymous',
+          questionId: currentQuestion.id,
+          questionText: currentQuestion.question,
+          userResponse: transcript
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Evaluation failed: ${response.status}`);
+      }
+
+      const evaluationResult = await response.json();
+      const normalizedScore = Math.max(1, Math.min(10, Number(evaluationResult.score) || 5));
+      
+      const evalData = {
+        score: parseFloat(normalizedScore.toFixed(1)),
+        feedback: evaluationResult.feedback || 'Thank you for your response!',
+        suggestions: Array.isArray(evaluationResult.suggestions) 
+          ? evaluationResult.suggestions.slice(0, 3)
+          : [],
+        corrections: evaluationResult.corrections || []
+      };
+
+      setCurrentEvaluation(evalData);
+      
+      // Store transcript and evaluation
+      const updatedTranscripts = [...oralTranscripts];
+      updatedTranscripts[currentIndex] = transcript;
+      setOralTranscripts(updatedTranscripts);
+
+      const updatedEvaluations = [...oralEvaluations];
+      updatedEvaluations[currentIndex] = evalData;
+      setOralEvaluations(updatedEvaluations);
+
+    } catch (err) {
+      console.error("Error in evaluation:", err);
+      setError("Failed to evaluate response. Please try again.");
+    } finally {
+      setIsEvaluating(false);
+      stopListening();
+    }
+  };
+
+  // Go to next question
   const handleNext = () => {
+    const currentQuestion = questions[currentIndex];
+    
+    // For oral questions, ensure they've submitted
+    if (currentQuestion.type === "oral") {
+      if (!oralEvaluations[currentIndex]) {
+        setError("Please submit your spoken answer first.");
+        return;
+      }
+    } else {
+      // For MC questions, ensure they've selected an answer
+      if (!userAnswers[currentIndex]) {
+        setError("Please select an answer.");
+        return;
+      }
+    }
+
+    // Clear current state
+    setTranscript("");
+    setCurrentEvaluation(null);
+    setError("");
+
     if (currentIndex < questions.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
@@ -61,35 +239,96 @@ function AIQuiz({ user, userProfile }) {
     }
   };
 
-  // 4️⃣ Submit and evaluate answers
+  // Submit and evaluate all answers
   const handleSubmitAssessment = async () => {
     setLoading(true);
     try {
-      const responses = questions.map((q, i) => ({
-        question: q.question,
-        answer: userAnswers[i],
-        correct: q.correct,
-      }));
+      // Prepare responses
+      const responses = [];
+      const scores = [];
+      let totalScore = 0;
+      let maxScore = 0;
 
-      const res = await fetch("http://127.0.0.1:8000/submit_assessment/", {
+      questions.forEach((q, i) => {
+        if (q.type === "multiple_choice") {
+          const isCorrect = userAnswers[i] === q.correct;
+          const score = isCorrect ? 10 : 0;
+          totalScore += score;
+          maxScore += 10;
+          
+          responses.push({
+            questionId: q.id,
+            question: q.question,
+            type: "multiple_choice",
+            answer: userAnswers[i],
+            correct: q.correct,
+            isCorrect: isCorrect
+          });
+          
+          scores.push({
+            questionId: q.id,
+            type: "multiple_choice",
+            score: score,
+            maxScore: 10
+          });
+        } else if (q.type === "oral") {
+          const evalData = oralEvaluations[i];
+          if (evalData) {
+            totalScore += evalData.score;
+            maxScore += 10;
+            
+            responses.push({
+              questionId: q.id,
+              question: q.question,
+              type: "oral",
+              transcript: oralTranscripts[i],
+              evaluation: evalData
+            });
+            
+            scores.push({
+              questionId: q.id,
+              type: "oral",
+              score: evalData.score,
+              maxScore: 10,
+              feedback: evalData.feedback,
+              suggestions: evalData.suggestions,
+              corrections: evalData.corrections
+            });
+          }
+        }
+      });
+
+      const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
+
+      // Submit to backend
+      const res = await fetch("http://127.0.0.1:8000/submit_quiz/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_id: user.uid,
-          assessment_id: "frontend_generated",
-          responses,
+          quiz_id: quizId,
+          responses: responses,
+          scores: scores,
+          total_score: totalScore,
+          percentage: percentage
         }),
       });
 
-      const data = await res.json();
-      setResult(data.data);
+      if (!res.ok) {
+        throw new Error("Failed to submit quiz");
+      }
 
-      // Optional: store result in Firestore
-      await addDoc(collection(db, "AssessmentResults"), {
-        user_id: user.uid,
-        result: data.data,
-        created_at: new Date(),
+      const data = await res.json();
+      
+      setResult({
+        totalScore,
+        maxScore,
+        percentage,
+        responses,
+        promoted: data.promoted || false,
+        newLevel: data.new_level
       });
+
     } catch (err) {
       console.error("Submission error:", err);
       setError("Failed to submit assessment.");
@@ -98,27 +337,42 @@ function AIQuiz({ user, userProfile }) {
     }
   };
 
-  // 5️⃣ Restart quiz
+  // Restart quiz
   const resetQuiz = () => {
     setQuestions([]);
     setUserAnswers([]);
+    setOralTranscripts([]);
+    setOralEvaluations([]);
     setCurrentIndex(0);
     setResult(null);
+    setQuizId(null);
+    setTranscript("");
+    setCurrentEvaluation(null);
+    stopListening();
   };
 
+  // Get current question
+  const currentQuestion = questions.length > 0 ? questions[currentIndex] : null;
+  const isOralQuestion = currentQuestion?.type === "oral";
+  const isMCQuestion = currentQuestion?.type === "multiple_choice";
+
   // -------------------- UI --------------------
-  if (loading)
+  if (loading && !questions.length)
     return (
       <div className="aiquiz-container">
-        <p className="loading">⏳ Processing... please wait</p>
+        <div className="aiquiz-card">
+          <p className="loading">Generating your personalized quiz... please wait</p>
+        </div>
       </div>
     );
 
-  if (error)
+  if (error && !questions.length)
     return (
       <div className="aiquiz-container">
-        <p className="error">{error}</p>
-        <button onClick={resetQuiz}>Try Again</button>
+        <div className="aiquiz-card">
+          <p className="error">{error}</p>
+          <button onClick={resetQuiz} className="generate-btn" style={{ marginTop: "20px" }}>Try Again</button>
+        </div>
       </div>
     );
 
@@ -126,76 +380,190 @@ function AIQuiz({ user, userProfile }) {
   if (result)
     return (
       <div className="aiquiz-container">
-        <h2>🎯 Assessment Completed!</h2>
-        <h3>
-          Score: {result.score}/{result.total} ({result.percentage}%)
-        </h3>
-
-        <div className="feedback-list">
-          {result.feedback.map((f, i) => (
-            <div
-              key={i}
-              className={`feedback-item ${f.is_correct ? "correct" : "wrong"}`}
-            >
-              <p>
-                <strong>Q{i + 1}:</strong> {f.question}
-              </p>
-              <p>
-                <strong>Your Answer:</strong> {f.given_answer}
-              </p>
-              <p>
-                <strong>AI Feedback:</strong> {f.ai_feedback}
-              </p>
+        <div className="aiquiz-card">
+          <div className="aiquiz-header">
+            <h2>🎯 Quiz Completed!</h2>
+          </div>
+          
+          <div style={{ textAlign: "center", marginBottom: "25px" }}>
+            <div className="score-display">
+              Score: {result.totalScore}/{result.maxScore} ({result.percentage}%)
             </div>
-          ))}
-        </div>
+          </div>
+          
+          {result.promoted && (
+            <div className="promotion-banner">
+              🎉 Congratulations! You've been promoted to <strong>{result.newLevel}</strong> level!
+            </div>
+          )}
 
-        <button onClick={resetQuiz}>Take Another Quiz 🔁</button>
+          <div className="feedback-list">
+            {result.responses.map((r, i) => (
+              <div
+                key={i}
+                className={`feedback-item ${r.type === "multiple_choice" ? (r.isCorrect ? "correct" : "wrong") : ""}`}
+              >
+                <p>
+                  <strong>Q{i + 1} ({r.type === "oral" ? "Oral" : "Multiple Choice"}):</strong> {r.question}
+                </p>
+                {r.type === "multiple_choice" ? (
+                  <>
+                    <p><strong>Your Answer:</strong> {r.answer}</p>
+                    <p><strong>Correct Answer:</strong> {r.correct}</p>
+                  </>
+                ) : (
+                  <>
+                    <p><strong>Your Response:</strong> {r.transcript}</p>
+                    <p><strong>Score:</strong> {r.evaluation.score}/10</p>
+                    <p><strong>Feedback:</strong> {r.evaluation.feedback}</p>
+                    {r.evaluation.suggestions && r.evaluation.suggestions.length > 0 && (
+                      <div className="suggestions">
+                        <strong>Suggestions:</strong>
+                        <ul>
+                          {r.evaluation.suggestions.map((s, idx) => (
+                            <li key={idx}>{s}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", gap: "15px", justifyContent: "center", marginTop: "30px", flexWrap: "wrap" }}>
+            <button onClick={resetQuiz} className="generate-btn">Take Another Quiz 🔁</button>
+            <button onClick={() => navigate("/")} className="generate-btn" style={{ background: "linear-gradient(135deg, #6c757d, #5a6268)" }}>Back to Home</button>
+          </div>
+        </div>
       </div>
     );
 
   // Show quiz questions
-  if (questions.length > 0)
+  if (questions.length > 0 && currentQuestion)
     return (
       <div className="aiquiz-container">
-        <h2>
-          Question {currentIndex + 1}/{questions.length}
-        </h2>
-        <p className="question">{questions[currentIndex].question}</p>
+        <div className="aiquiz-card">
+          <div className="aiquiz-header">
+            <h2>
+              Question {currentIndex + 1}/{questions.length}
+            </h2>
+            {isOralQuestion && <span className="question-type-badge">🎤 Oral Question</span>}
+            {isMCQuestion && <span className="question-type-badge">📝 Multiple Choice</span>}
+          </div>
+          <p className="question">{currentQuestion.question}</p>
 
-        <div className="options">
-          {questions[currentIndex].options.map((opt, idx) => (
+        {isMCQuestion && (
+          <>
+            <div className="options">
+              {currentQuestion.options.map((opt, idx) => (
+                <button
+                  key={idx}
+                  className={`option-btn ${
+                    userAnswers[currentIndex] === opt ? "active" : ""
+                  }`}
+                  onClick={() => handleSelect(opt)}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
             <button
-              key={idx}
-              className={`option-btn ${
-                userAnswers[currentIndex] === opt ? "active" : ""
-              }`}
-              onClick={() => handleSelect(opt)}
+              onClick={handleNext}
+              disabled={!userAnswers[currentIndex]}
+              className="next-btn"
             >
-              {opt}
+              {currentIndex < questions.length - 1 ? "Next ➡" : "Submit ✅"}
             </button>
-          ))}
-        </div>
+          </>
+        )}
 
-        <button
-          onClick={handleNext}
-          disabled={!userAnswers[currentIndex]}
-          className="next-btn"
-        >
-          {currentIndex < questions.length - 1 ? "Next ➡" : "Submit ✅"}
-        </button>
+        {isOralQuestion && (
+          <>
+            {!oralEvaluations[currentIndex] ? (
+              <>
+                <div className="oral-question-container">
+                  {!listening && !transcript && (
+                    <button onClick={startListening} className="start-listening-btn">
+                      🎤 Start Speaking
+                    </button>
+                  )}
+                  
+                  {listening && (
+                    <div className="listening-indicator">
+                      <span className="pulse">🔴 Recording...</span>
+                      <button onClick={stopListening} className="stop-btn">Stop</button>
+                    </div>
+                  )}
+
+                  {transcript && (
+                    <div className="transcript-display">
+                      <p><strong>Your response:</strong></p>
+                      <p>{transcript}</p>
+                    </div>
+                  )}
+
+                  {transcript && !isEvaluating && !oralEvaluations[currentIndex] && (
+                    <button onClick={submitOralAnswer} className="submit-oral-btn">
+                      Submit Answer
+                    </button>
+                  )}
+
+                  {isEvaluating && (
+                    <p className="evaluating">⏳ Evaluating your response...</p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="evaluation-display">
+                  <p><strong>Your response:</strong> {oralTranscripts[currentIndex]}</p>
+                  <div className="score-display">
+                    <strong>Score: {oralEvaluations[currentIndex].score}/10</strong>
+                  </div>
+                  <p><strong>Feedback:</strong> {oralEvaluations[currentIndex].feedback}</p>
+                  {oralEvaluations[currentIndex].suggestions && oralEvaluations[currentIndex].suggestions.length > 0 && (
+                    <div className="suggestions">
+                      <strong>Suggestions:</strong>
+                      <ul>
+                        {oralEvaluations[currentIndex].suggestions.map((s, idx) => (
+                          <li key={idx}>{s}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                <button onClick={handleNext} className="next-btn">
+                  {currentIndex < questions.length - 1 ? "Next ➡" : "Submit Quiz ✅"}
+                </button>
+              </>
+            )}
+          </>
+        )}
+
+          {error && <p className="error">{error}</p>}
+        </div>
       </div>
     );
 
   // Default state
   return (
     <div className="aiquiz-container">
-      <h2>🧠 AI Practice Assessment</h2>
-      <p>
-        Take a personalized quiz based on your level. Click below to generate
-        your questions.
-      </p>
-      <button onClick={generateAssessment}>Generate Assessment 🚀</button>
+      <div className="aiquiz-card">
+        <div className="aiquiz-header">
+          <h2>🧠 AI Practice Assessment</h2>
+        </div>
+        <div style={{ textAlign: "center", padding: "20px 0" }}>
+          <p style={{ fontSize: "16px", color: "#64748b", marginBottom: "30px", lineHeight: "1.6" }}>
+            Take a personalized quiz based on your current level (<strong>{userProfile?.assessmentLevel || "BASIC"}</strong>). 
+            The quiz includes both multiple-choice and oral questions.
+          </p>
+          <button onClick={generateAssessment} className="generate-btn">
+            Start AI Quiz 🚀
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

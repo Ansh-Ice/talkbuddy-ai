@@ -671,6 +671,24 @@ button {
   background: rgba(255,255,255,0.2);
 }
 
+.cta.quiz {
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.cta.quiz .cta-icon {
+  background: rgba(255,255,255,0.2);
+}
+
+.cta.quiz-history {
+  background: linear-gradient(135deg, #10b981, #3b82f6);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.cta.quiz-history .cta-icon {
+  background: rgba(255,255,255,0.2);
+}
+
 .insights h2,
 .activities h2,
 .progress h2,
