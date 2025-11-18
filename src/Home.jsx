@@ -6,13 +6,38 @@ import { collection, query, where, orderBy, limit, getDocs } from 'firebase/fire
 import ProfileSidebar from './ProfileSidebar';
 import { useAuthValidation, useSecureLogout } from './hooks/useAuthValidation';
 import { useNavigate } from "react-router-dom";
+// Add Chart.js imports
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+} from 'chart.js';
+import { Line } from 'react-chartjs-2';
 
-
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
 
 export default function Home({ user, userProfile }) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [voiceSessions, setVoiceSessions] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(true);
+  const [quizHistory, setQuizHistory] = useState([]); // Add state for quiz history
+  const [loadingQuizHistory, setLoadingQuizHistory] = useState(true); // Add loading state
   const navigate = useNavigate();
 
   // Use custom hooks for authentication validation and secure logout
@@ -52,6 +77,47 @@ export default function Home({ user, userProfile }) {
     };
 
     fetchVoiceSessions();
+  }, [user]);
+
+  // Fetch quiz history for chart
+  useEffect(() => {
+    if (!user) {
+      setLoadingQuizHistory(false);
+      return;
+    }
+
+    const fetchQuizHistory = async () => {
+      try {
+        const quizzesRef = collection(db, "users", user.uid, "ai_quizzes");
+        // Query for quizzes that have been attempted (have attempted_at field)
+        const q = query(
+          quizzesRef,
+          orderBy("created_at", "desc"),
+          limit(10)
+        );
+        const snapshot = await getDocs(q);
+        const quizzes = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            created_at: data.created_at?.toDate ? data.created_at.toDate() : new Date(data.created_at),
+            attempted_at: data.attempted_at?.toDate ? data.attempted_at.toDate() : (data.attempted_at ? new Date(data.attempted_at) : null)
+          };
+        });
+        
+        // Filter for only attempted quizzes and sort by date ascending for chart
+        const attemptedQuizzes = quizzes.filter(quiz => quiz.attempted_at !== null);
+        const sortedQuizzes = [...attemptedQuizzes].sort((a, b) => a.attempted_at - b.attempted_at);
+        setQuizHistory(sortedQuizzes);
+      } catch (err) {
+        console.error('Error fetching quiz history:', err);
+      } finally {
+        setLoadingQuizHistory(false);
+      }
+    };
+
+    fetchQuizHistory();
   }, [user]);
 
   const scrollToSection = (sectionId) => {
@@ -103,6 +169,108 @@ export default function Home({ user, userProfile }) {
   const overallPercentage = userProfile?.assessmentOverallPercentage ?? computedOverallPercentage;
   const placementLevel = userProfile?.assessmentLevel;
   const assessmentCompletedAt = userProfile?.assessmentCompletedAt;
+
+  // Chart data configuration
+  const chartData = {
+    labels: quizHistory.map(quiz => 
+      quiz.attempted_at.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric' 
+      })
+    ),
+    datasets: [
+      {
+        label: 'Quiz Score %',
+        data: quizHistory.map(quiz => quiz.percentage || 0),
+        borderColor: '#06b6d4',
+        backgroundColor: 'rgba(6, 182, 212, 0.1)',
+        borderWidth: 3,
+        pointBackgroundColor: '#06b6d4',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        fill: true,
+        tension: 0.4
+      },
+      {
+        label: 'Oral Score %',
+        data: quizHistory.map(quiz => 
+          quiz.responses ? 
+            (quiz.responses.filter(r => r.type === 'oral' && r.evaluation).reduce((sum, r) => sum + (r.evaluation?.score || 0), 0) / 
+             Math.max(quiz.responses.filter(r => r.type === 'oral' && r.evaluation).length, 1) * 10) || 0 
+            : 0
+        ),
+        borderColor: '#8b5cf6',
+        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+        borderWidth: 3,
+        pointBackgroundColor: '#8b5cf6',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        fill: true,
+        tension: 0.4
+      }
+    ]
+  };
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top',
+        labels: {
+          color: '#e5e7eb',
+          font: {
+            size: 12
+          }
+        }
+      },
+      tooltip: {
+        backgroundColor: 'rgba(17, 24, 39, 0.9)',
+        titleColor: '#e5e7eb',
+        bodyColor: '#e5e7eb',
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderWidth: 1,
+        padding: 12,
+        displayColors: true,
+        callbacks: {
+          label: function(context) {
+            return `${context.dataset.label}: ${context.parsed.y}%`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: {
+          color: 'rgba(255, 255, 255, 0.05)'
+        },
+        ticks: {
+          color: '#9ca3af'
+        }
+      },
+      y: {
+        min: 0,
+        max: 100,
+        grid: {
+          color: 'rgba(255, 255, 255, 0.05)'
+        },
+        ticks: {
+          color: '#9ca3af',
+          callback: function(value) {
+            return value + '%';
+          }
+        }
+      }
+    },
+    interaction: {
+      mode: 'index',
+      intersect: false
+    }
+  };
 
   return (
     <div className="home" id="home-top">
@@ -362,14 +530,41 @@ export default function Home({ user, userProfile }) {
       <section id="progress" className="progress" aria-labelledby="progress-overview">
         <h2 id="progress-overview">Progress Overview</h2>
         <div className="card chart">
-          <div className="chart-placeholder">
-            <span>Chart placeholder</span>
-          </div>
-          <div className="chart-legend">
-            <span>Confidence %</span>
-            <span>Speech clarity</span>
-            <span>Emotion stability</span>
-          </div>
+          {loadingQuizHistory ? (
+            <div className="chart-placeholder">
+              <span>Loading progress data...</span>
+            </div>
+          ) : quizHistory.length > 0 ? (
+            <>
+              <div style={{ height: '300px', position: 'relative' }}>
+                <Line data={chartData} options={chartOptions} />
+              </div>
+              <div className="chart-legend">
+                <span style={{ color: '#06b6d4' }}>Quiz Score %</span>
+                <span style={{ color: '#8b5cf6' }}>Oral Score %</span>
+              </div>
+            </>
+          ) : (
+            <div className="chart-placeholder">
+              <span>No quiz data available. Take a quiz to see your progress!</span>
+              <button 
+                onClick={() => navigate("/aiquiz")} 
+                className="take-quiz-btn"
+                style={{ 
+                  marginTop: '1rem', 
+                  padding: '0.75rem 1.5rem',
+                  background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Start AI Quiz 🚀
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
