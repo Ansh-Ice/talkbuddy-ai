@@ -662,6 +662,15 @@ button {
   background: rgba(255,255,255,0.2);
 }
 
+.cta.history {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.cta.history .cta-icon {
+  background: rgba(255,255,255,0.2);
+}
+
 .insights h2,
 .activities h2,
 .progress h2,
@@ -1184,20 +1193,114 @@ button {
   }
 }
 
-/* Mobile responsiveness */
+  /* Mobile responsiveness */
+  @media (max-width: 640px) {
+    .profile-sidebar {
+      max-width: 100%;
+    }
+    
+    .sidebar-content {
+      padding: 16px;
+    }
+    
+    .profile-section {
+      padding: 16px;
+    }
+  }
+  
+  /* Voice Sessions Styles */
+  .voice-sessions {
+    margin: 2rem 0;
+  }
+  
+  .voice-sessions h2 {
+    margin: 0 0 20px;
+    font-size: 18px;
+    color: #cbd5e1;
+  }
+  
+  .loading-text {
+    text-align: center;
+    color: #9ca3af;
+    font-size: 14px;
+    padding: 20px;
+  }
+  
+  .sessions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+  }
+  
+  .session-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    transition: transform 0.2s ease, border-color 0.2s ease;
+  }
+  
+  .session-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(99, 102, 241, 0.3);
+  }
+  
+  .session-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  
+  .session-date {
+    font-size: 13px;
+    color: #9ca3af;
+    font-weight: 500;
+  }
+  
+  .session-badge {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    color: #c7d2fe;
+    font-weight: 500;
+  }
+  
+  .session-feedback {
+    margin: 0 0 12px;
+    color: #e5e7eb;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  
+  .session-tip {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 12px;
+    padding: 12px;
+    font-size: 13px;
+    color: #6ee7b7;
+    line-height: 1.5;
+  }
+  
+  .session-tip strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #34d399;
+  }
+  
+  @media (max-width: 768px) {
+    .sessions-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
 @media (max-width: 640px) {
-  .profile-sidebar {
-    max-width: 100%;
-  }
-  
-  .sidebar-content {
-    padding: 16px;
-  }
-  
-  .profile-section {
-    padding: 16px;
-  }
-  
   .form-actions {
     flex-direction: column;
   }

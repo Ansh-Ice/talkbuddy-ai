@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
-import { useState } from "react";
-import { auth } from './firebase';
+import { useState, useEffect } from "react";
+import { auth, db } from './firebase';
 import { signOut } from 'firebase/auth';
+import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
 import ProfileSidebar from './ProfileSidebar';
 import { useAuthValidation, useSecureLogout } from './hooks/useAuthValidation';
 import { useNavigate } from "react-router-dom";
@@ -10,11 +11,48 @@ import { useNavigate } from "react-router-dom";
 
 export default function Home({ user, userProfile }) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [voiceSessions, setVoiceSessions] = useState([]);
+  const [loadingSessions, setLoadingSessions] = useState(true);
   const navigate = useNavigate();
 
   // Use custom hooks for authentication validation and secure logout
   useAuthValidation(user, ['/']);
   const handleLogout = useSecureLogout(() => signOut(auth));
+
+  // Fetch voice sessions
+  useEffect(() => {
+    if (!user) {
+      setLoadingSessions(false);
+      return;
+    }
+
+    const fetchVoiceSessions = async () => {
+      try {
+        const sessionsRef = collection(db, "voice_sessions");
+        const q = query(
+          sessionsRef,
+          where("userId", "==", user.uid),
+          where("status", "==", "completed"),
+          orderBy("createdAt", "desc"),
+          limit(5)
+        );
+        
+        const snapshot = await getDocs(q);
+        const sessions = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        setVoiceSessions(sessions);
+      } catch (err) {
+        console.error('Error fetching voice sessions:', err);
+      } finally {
+        setLoadingSessions(false);
+      }
+    };
+
+    fetchVoiceSessions();
+  }, [user]);
 
   const scrollToSection = (sectionId) => {
     const target = document.getElementById(sectionId);
@@ -113,6 +151,13 @@ export default function Home({ user, userProfile }) {
               <div>
                 <div className="cta-title">Video Call</div>
                 <div className="cta-subtitle">Face-to-face practice</div>
+              </div>
+            </button>
+            <button className="cta history" onClick={() => navigate("/chat-history")}>
+              <span className="cta-icon">💬</span>
+              <div>
+                <div className="cta-title">Chat History</div>
+                <div className="cta-subtitle">View past sessions</div>
               </div>
             </button>
           </div>
@@ -245,6 +290,47 @@ export default function Home({ user, userProfile }) {
           </article>
         </div>
       </section>
+
+      {/* Voice Practice Sessions */}
+      {user && voiceSessions.length > 0 && (
+        <section className="voice-sessions" aria-labelledby="voice-sessions">
+          <h2 id="voice-sessions">Recent Voice Practice Sessions 🎙️</h2>
+          {loadingSessions ? (
+            <p className="loading-text">Loading sessions...</p>
+          ) : (
+            <div className="sessions-grid">
+              {voiceSessions.map((session) => {
+                const sessionDate = session.createdAt?.toDate ? 
+                  session.createdAt.toDate().toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric', 
+                    year: 'numeric' 
+                  }) : 
+                  'Recent';
+                
+                const mistakeCount = session.summary?.corrections?.length || 0;
+                const feedback = session.summary?.final_feedback || "Great practice session!";
+                const tip = session.summary?.tips || "Keep up the good work!";
+
+                return (
+                  <div key={session.id} className="session-card">
+                    <div className="session-header">
+                      <span className="session-date">{sessionDate}</span>
+                      <span className="session-badge">
+                        {mistakeCount === 0 ? '✨ Perfect' : `${mistakeCount} ${mistakeCount === 1 ? 'correction' : 'corrections'}`}
+                      </span>
+                    </div>
+                    <p className="session-feedback">{feedback}</p>
+                    <div className="session-tip">
+                      <strong>💡 Tip:</strong> {tip}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
 
       <section id="features" className="activities" aria-labelledby="recommended-activities">
         <h2 id="recommended-activities">Recommended Activities</h2>

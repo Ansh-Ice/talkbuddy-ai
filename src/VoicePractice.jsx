@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Loader2, Mic, MicOff, RotateCcw, Volume2 } from "lucide-react";
+import { collection, addDoc, updateDoc, doc, serverTimestamp } from "firebase/firestore";
+import { db } from "./firebase";
 import "./VoicePractice.css";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
@@ -29,6 +31,10 @@ const VoicePractice = ({ user }) => {
   const [callConnecting, setCallConnecting] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [playedMessages, setPlayedMessages] = useState(new Set());
+  const [sessionId, setSessionId] = useState(null);
+  const [showSummary, setShowSummary] = useState(false);
+  const [sessionSummary, setSessionSummary] = useState(null);
+  const [generatingSummary, setGeneratingSummary] = useState(false);
 
   const recognitionRef = useRef(null);
   const capturedSpeechRef = useRef("");
@@ -241,6 +247,60 @@ const VoicePractice = ({ user }) => {
     sendMessage(trimmed);
   };
 
+  // Create Firestore session
+  const createSession = async () => {
+    try {
+      const sessionDoc = await addDoc(collection(db, "voice_sessions"), {
+        userId: user?.uid || "anonymous",
+        createdAt: serverTimestamp(),
+        messages: [],
+        status: "active"
+      });
+      setSessionId(sessionDoc.id);
+      return sessionDoc.id;
+    } catch (err) {
+      console.error('Error creating session:', err);
+      return null;
+    }
+  };
+
+  // Save message to Firestore
+  const saveMessageToFirestore = async (role, content, audioUrl = null) => {
+    if (!sessionId) return;
+    
+    try {
+      const sessionRef = doc(db, "voice_sessions", sessionId);
+      const messageData = {
+        role,
+        content,
+        timestamp: new Date().toISOString()
+      };
+      
+      if (audioUrl) {
+        messageData.audioUrl = audioUrl;
+      }
+      
+      // Get current messages and append new one
+      const updatedMessages = messagesRef.current.map(m => {
+        const msg = {
+          role: m.role,
+          content: m.text,
+          timestamp: new Date().toISOString()
+        };
+        if (m.audioUrl) {
+          msg.audioUrl = m.audioUrl;
+        }
+        return msg;
+      });
+      
+      await updateDoc(sessionRef, {
+        messages: updatedMessages
+      });
+    } catch (err) {
+      console.error('Error saving message:', err);
+    }
+  };
+
   // Start/stop call functions
   const startCall = async () => {
     if (!speechSupported || callActive) return;
@@ -251,6 +311,9 @@ const VoicePractice = ({ user }) => {
     try {
       // Request microphone access
       await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Create Firestore session
+      const newSessionId = await createSession();
       
       // Reset state
       capturedSpeechRef.current = "";
@@ -263,11 +326,12 @@ const VoicePractice = ({ user }) => {
       
       // Add welcome message if it's the first message
       if (messages.length <= 1) {
-        setMessages([{
+        const welcomeMsg = {
           id: createId(),
           role: "assistant",
           text: "Hi! I'm your English practice partner. Start speaking and I'll help you improve!",
-        }]);
+        };
+        setMessages([welcomeMsg]);
       }
     } catch (err) {
       console.error('Error starting call:', err);
@@ -277,7 +341,7 @@ const VoicePractice = ({ user }) => {
     }
   };
 
-  const endCall = () => {
+  const endCall = async () => {
     stopSpeaking();
     
     try {
@@ -292,6 +356,11 @@ const VoicePractice = ({ user }) => {
     setInterimText("");
     recognitionPausedRef.current = false;
     stopAllTimers();
+
+    // Generate and show summary
+    if (sessionId && messages.length > 1) {
+      await generateSessionSummary();
+    }
   };
 
   // Text-to-speech functions
@@ -394,6 +463,99 @@ const VoicePractice = ({ user }) => {
     }, 500); // Slightly longer delay to ensure clean state
   };
 
+  // Generate session summary
+  const generateSessionSummary = async () => {
+    setGeneratingSummary(true);
+    
+    try {
+      // Build conversation text
+      const conversationText = messages
+        .filter(m => m.role === "user")
+        .map(m => m.text)
+        .join(" ");
+
+      if (!conversationText.trim()) {
+        setGeneratingSummary(false);
+        navigate("/");
+        return;
+      }
+
+      // Generate session title from conversation
+      const firstUserMessage = messages.find(m => m.role === "user");
+      let sessionTitle = "Voice practice session";
+      
+      if (firstUserMessage && firstUserMessage.text) {
+        // Clean up the title - remove extra spaces, capitalize first letter
+        const rawTitle = firstUserMessage.text.trim();
+        sessionTitle = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1, 50);
+        if (rawTitle.length > 50) {
+          sessionTitle += "...";
+        }
+      }
+
+      // Call evaluation endpoint
+      const response = await fetch(`${API_BASE}/api/oral-quiz/evaluate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user?.uid || "anonymous",
+          questionId: "voice_practice_session",
+          userResponse: conversationText,
+          questionText: "Voice practice session evaluation"
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate summary");
+      }
+
+      const evaluation = await response.json();
+      
+      const summary = {
+        mistakes: evaluation.corrections || [],
+        corrections: evaluation.corrections || [],
+        tips: evaluation.suggestions?.[0] || "Keep practicing!",
+        final_feedback: evaluation.feedback || "Good job!"
+      };
+
+      setSessionSummary(summary);
+      setShowSummary(true);
+
+      // Update session in Firestore
+      if (sessionId) {
+        const sessionRef = doc(db, "voice_sessions", sessionId);
+        await updateDoc(sessionRef, {
+          status: "completed",
+          endedAt: serverTimestamp(),
+          summary,
+          title: sessionTitle,
+          messages: messages.map(m => {
+            const msg = {
+              role: m.role,
+              content: m.text,
+              timestamp: new Date().toISOString()
+            };
+            if (m.audioUrl) {
+              msg.audioUrl = m.audioUrl;
+            }
+            return msg;
+          })
+        });
+      }
+    } catch (err) {
+      console.error('Error generating summary:', err);
+      navigate("/");
+    } finally {
+      setGeneratingSummary(false);
+    }
+  };
+
+  // Close summary and redirect
+  const closeSummary = () => {
+    setShowSummary(false);
+    navigate("/");
+  };
+
   // Message handling
   const sendMessage = async (text) => {
     if (!text.trim() || isProcessing) return;
@@ -404,6 +566,9 @@ const VoicePractice = ({ user }) => {
     setInterimText("");
     setLoadingReply(true);
     setIsProcessing(true);
+
+    // Save user message to Firestore
+    await saveMessageToFirestore("user", text);
 
     // Abort any pending requests
     if (abortControllerRef.current) {
@@ -437,6 +602,9 @@ const VoicePractice = ({ user }) => {
       };
       
       setMessages(prev => [...prev, aiMessage]);
+      
+      // Save AI message to Firestore
+      await saveMessageToFirestore("assistant", replyText);
       
     } catch (err) {
       if (err.name === 'AbortError') {
@@ -503,6 +671,57 @@ const VoicePractice = ({ user }) => {
 
   return (
     <div className="voice-practice-page">
+      {/* Summary Modal */}
+      {showSummary && sessionSummary && (
+        <div className="summary-modal-overlay">
+          <div className="summary-modal">
+            <h2>Session Summary</h2>
+            
+            <div className="summary-section">
+              <h3>Your Performance</h3>
+              <p className="summary-feedback">{sessionSummary.final_feedback}</p>
+            </div>
+
+            {sessionSummary.corrections && sessionSummary.corrections.length > 0 && (
+              <div className="summary-section">
+                <h3>Mistakes & Corrections</h3>
+                <ul className="corrections-list">
+                  {sessionSummary.corrections.slice(0, 3).map((correction, idx) => (
+                    <li key={idx}>
+                      <span className="mistake">❌ {correction.original}</span>
+                      <span className="arrow">→</span>
+                      <span className="correction">✅ {correction.corrected}</span>
+                      {correction.explanation && (
+                        <p className="explanation">{correction.explanation}</p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="summary-section">
+              <h3>Improvement Tip</h3>
+              <p className="tip">{sessionSummary.tips}</p>
+            </div>
+
+            <button className="close-summary-btn" onClick={closeSummary}>
+              Continue to Home
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Loading overlay for summary generation */}
+      {generatingSummary && (
+        <div className="summary-loading-overlay">
+          <div className="summary-loading">
+            <Loader2 size={40} className="spin" />
+            <p>Generating your feedback summary...</p>
+          </div>
+        </div>
+      )}
+
       <header className="voice-header sticky-controls">
         <div className="control-bar">
           <button className="ghost-btn" onClick={handleExit}>

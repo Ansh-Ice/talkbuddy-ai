@@ -15,6 +15,7 @@ import AIQuiz from './AIQuiz'
 import VoicePractice from './VoicePractice'
 import GuidedRoutine from './GuidedRoutine'
 import VideoCall from './VideoCall'
+import ChatHistory from './ChatHistory'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -249,6 +250,16 @@ function App() {
         element={
           user ? (
             <VoicePractice user={user} />
+          ) : (
+            <Navigate to="/auth" replace />
+          )
+        }
+      />
+      <Route
+        path="/chat-history"
+        element={
+          user ? (
+            <ChatHistory user={user} />
           ) : (
             <Navigate to="/auth" replace />
           )
