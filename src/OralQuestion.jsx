@@ -19,7 +19,7 @@ const extractKeywords = (text) => {
   )];
 };
 
-function OralQuestion({ user }) {
+function OralQuestion({ user, userProfile, refreshUserProfile }) {
   const [questions, setQuestions] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [transcript, setTranscript] = useState("");
@@ -32,6 +32,20 @@ function OralQuestion({ user }) {
   const [scores, setScores] = useState([]);
   const recognitionRef = useRef(null);
   const navigate = useNavigate();
+
+  // Redirect away if oral test already completed (based on users collection profile)
+  useEffect(() => {
+    if (userProfile?.oralTestCompleted) {
+      navigate("/", { replace: true });
+    }
+  }, [userProfile, navigate]);
+
+  // Ensure we have the latest user profile when entering the oral test
+  useEffect(() => {
+    if (typeof refreshUserProfile === "function") {
+      refreshUserProfile();
+    }
+  }, [refreshUserProfile]);
 
   // Sample questions if database fails
   const sampleQuestions = [
@@ -292,14 +306,16 @@ function OralQuestion({ user }) {
     if (currentIndex < questions.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
+      // All questions completed – go back to main Home dashboard
       const totalScore = scores.reduce((sum, s) => sum + s.score, 0);
-      navigate('/results', { 
-        state: { 
+      navigate("/", {
+        replace: true,
+        state: {
           scores,
           questions,
           totalScore: Math.round((totalScore / (questions.length * 10)) * 100),
           maxPossibleScore: 100
-        } 
+        }
       });
     }
   };
