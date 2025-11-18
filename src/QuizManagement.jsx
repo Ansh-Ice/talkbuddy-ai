@@ -107,7 +107,7 @@ const QuizManagement = () => {
         <div className="question-actions">
           <button
             className="action-btn edit"
-            onClick={() => setEditingQuestion(question.id)}
+            onClick={() => setEditingQuestion(question)}  // <-- changed: pass object
           >
             <Edit size={16} />
           </button>
@@ -411,8 +411,8 @@ const QuizManagement = () => {
         ) : (
           filteredQuestions.map(question => (
             <div key={question.id}>
-              {editingQuestion === question.id ? (
-                <EditQuestionForm question={question} />
+              {editingQuestion?.id === question.id ? (
+                <EditQuestionForm question={editingQuestion} />
               ) : (
                 <QuestionCard question={question} />
               )}

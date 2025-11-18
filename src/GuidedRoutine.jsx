@@ -310,3 +310,4 @@ const GuidedRoutine = ({ user }) => {
 
 export default GuidedRoutine;
 
+

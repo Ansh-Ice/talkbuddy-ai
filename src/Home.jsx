@@ -70,7 +70,7 @@ export default function Home({ user, userProfile }) {
                 <div className="cta-subtitle">Start speaking now</div>
               </div>
             </button>
-            <button className="cta video">
+            <button className="cta video" onClick={() => navigate("/video-call")}>
               <span className="cta-icon">🎥</span>
               <div>
                 <div className="cta-title">Video Call</div>
