@@ -14,6 +14,7 @@ import AdminDashboard from './AdminDashboard'
 import AIQuiz from './AIQuiz'
 import VoicePractice from './VoicePractice'
 import GuidedRoutine from './GuidedRoutine'
+import VideoCall from './VideoCall'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -248,6 +249,16 @@ function App() {
         element={
           user ? (
             <VoicePractice user={user} />
+          ) : (
+            <Navigate to="/auth" replace />
+          )
+        }
+      />
+      <Route
+        path="/video-call"
+        element={
+          user ? (
+            <VideoCall />
           ) : (
             <Navigate to="/auth" replace />
           )
