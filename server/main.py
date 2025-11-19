@@ -536,12 +536,24 @@ def get_quiz_generation_prompt(level: str) -> str:
     level_lower = level.lower()
     
     if level == "BASIC":
-        return """Generate an English quiz for a BASIC level learner. The quiz should have:
-- 3 multiple-choice questions (simple grammar, basic vocabulary)
-- 5 oral/speaking questions (short, simple prompts)
-- Questions should be very simple with short sentences
-- Focus on: present tense, basic vocabulary, simple questions
-- Oral questions should be 1-2 sentences max, easy to answer
+        return """You are an expert English language teacher creating a quiz for a BASIC level learner (beginner). 
+
+Create engaging, practical questions that test real understanding, not just memorization. Make questions relevant to everyday situations.
+
+QUIZ REQUIREMENTS:
+- 3 multiple-choice questions covering: present simple tense, basic articles (a/an/the), common verbs (be, have, do, go), simple prepositions (in, on, at), and basic vocabulary
+- 5 oral/speaking questions that are conversational and easy to answer with personal experience
+- All questions must be clear, unambiguous, and use simple vocabulary
+- Multiple-choice questions should have ONE clearly correct answer and 3 plausible distractors
+- Oral questions should encourage personal responses and be 1-2 sentences maximum
+- Vary topics: daily routines, family, hobbies, food, weather, simple descriptions
+
+QUALITY GUIDELINES:
+- Use real-world contexts (e.g., "I ___ to work every day" not abstract grammar)
+- Make questions practical and relatable
+- Ensure oral questions can be answered with 2-3 simple sentences
+- Avoid trick questions or overly complex sentence structures
+- Test one concept per question clearly
 
 Return ONLY a valid JSON array in this exact format:
 [
@@ -562,12 +574,25 @@ Return ONLY a valid JSON array in this exact format:
 Generate exactly 3 multiple-choice and 5 oral questions. Return only the JSON array, no other text."""
     
     elif level == "INTERMEDIATE":
-        return """Generate an English quiz for an INTERMEDIATE level learner. The quiz should have:
-- 3 multiple-choice questions (moderate grammar, varied vocabulary)
-- 5 oral/speaking questions (moderately complex prompts)
-- Questions should have slightly complex grammar structures
-- Focus on: past/present perfect, conditional sentences, phrasal verbs
-- Oral questions should be 2-3 sentences, require more detailed answers
+        return """You are an expert English language teacher creating a quiz for an INTERMEDIATE level learner.
+
+Create thought-provoking questions that test grammar accuracy, vocabulary usage, and ability to express ideas clearly. Questions should challenge learners while remaining achievable.
+
+QUIZ REQUIREMENTS:
+- 3 multiple-choice questions covering: past simple vs present perfect, past perfect, first/second conditionals, phrasal verbs (common ones like "give up", "look after", "turn down"), passive voice, and relative clauses
+- 5 oral/speaking questions that require expressing opinions, describing experiences, or explaining concepts
+- Questions should use varied sentence structures and natural, conversational language
+- Multiple-choice questions should test understanding of subtle grammar differences, not just memorization
+- Oral questions should be 2-3 sentences and encourage responses of 3-5 sentences
+- Vary topics: experiences, opinions, hypothetical situations, comparisons, advice
+
+QUALITY GUIDELINES:
+- Use authentic contexts that intermediate learners encounter (work, travel, relationships, goals)
+- Test ability to choose correct tense based on context and meaning
+- Make distractors plausible but clearly incorrect
+- Oral questions should require connecting ideas and using appropriate grammar structures
+- Encourage critical thinking and personal expression
+- Avoid overly formal or academic language unless testing formal register
 
 Return ONLY a valid JSON array in this exact format:
 [
@@ -588,12 +613,26 @@ Return ONLY a valid JSON array in this exact format:
 Generate exactly 3 multiple-choice and 5 oral questions. Return only the JSON array, no other text."""
     
     else:  # ADVANCED
-        return """Generate an English quiz for an ADVANCED level learner. The quiz should have:
-- 3 multiple-choice questions (complex grammar, advanced vocabulary)
-- 5 oral/speaking questions (complex, long-form prompts)
-- Questions should test advanced grammar and nuanced language
-- Focus on: complex tenses, subjunctive mood, advanced idioms, formal language
-- Oral questions should be 3-4 sentences, require detailed, thoughtful responses
+        return """You are an expert English language teacher creating a quiz for an ADVANCED level learner.
+
+Create sophisticated questions that test mastery of nuanced grammar, precise vocabulary, and ability to articulate complex ideas. Questions should reflect native-level proficiency expectations.
+
+QUIZ REQUIREMENTS:
+- 3 multiple-choice questions covering: third conditionals, mixed conditionals, subjunctive mood, advanced phrasal verbs, complex prepositions, collocations, advanced idioms, formal vs informal register, and subtle grammar distinctions
+- 5 oral/speaking questions that require analytical thinking, argumentation, or sophisticated expression
+- Questions should demonstrate understanding of register, tone, and stylistic choices
+- Multiple-choice questions should test subtle differences between correct and near-correct options
+- Oral questions should be 3-4 sentences and require well-structured, thoughtful responses (5+ sentences)
+- Vary topics: abstract concepts, social issues, professional scenarios, cultural analysis, hypothetical complex situations
+
+QUALITY GUIDELINES:
+- Use sophisticated vocabulary and complex sentence structures naturally
+- Test understanding of when to use formal vs informal language
+- Include questions that require distinguishing between similar advanced structures
+- Oral questions should prompt nuanced opinions, analysis, or sophisticated explanations
+- Make distractors very close to correct but clearly wrong upon careful consideration
+- Test ability to use language precisely and appropriately for context
+- Encourage articulate, well-reasoned responses that demonstrate language mastery
 
 Return ONLY a valid JSON array in this exact format:
 [
