@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "./firebase";
+import confetti from "canvas-confetti";
 import "./AIQuiz.css";
 import "./OralQuestion.css";
 
@@ -262,6 +263,7 @@ function AIQuiz({ user, userProfile }) {
             type: "multiple_choice",
             answer: userAnswers[i],
             correct: q.correct,
+            options: q.options,
             isCorrect: isCorrect
           });
           
@@ -385,6 +387,38 @@ function AIQuiz({ user, userProfile }) {
     );
 
   // After quiz submission
+  useEffect(() => {
+    if (result && result.percentage > 50) {
+      const duration = 5 * 1000;
+      const animationEnd = Date.now() + duration;
+      const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+      const randomInRange = (min, max) => Math.random() * (max - min) + min;
+
+      const interval = setInterval(() => {
+        const timeLeft = animationEnd - Date.now();
+
+        if (timeLeft <= 0) {
+          return clearInterval(interval);
+        }
+
+        const particleCount = 50 * (timeLeft / duration);
+        confetti(
+          Object.assign({}, defaults, {
+            particleCount,
+            origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
+          })
+        );
+        confetti(
+          Object.assign({}, defaults, {
+            particleCount,
+            origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
+          })
+        );
+      }, 250);
+    }
+  }, [result]);
+
   if (result)
     return (
       <div className="aiquiz-container">
@@ -452,8 +486,17 @@ function AIQuiz({ user, userProfile }) {
                   <p><strong>Question:</strong> {r.question}</p>
                   {r.type === "multiple_choice" ? (
                     <>
-                      <p><strong>Your Answer:</strong> {r.answer}</p>
-                      <p><strong>Correct Answer:</strong> {r.correct}</p>
+                      <div className="question-options">
+                        <p><strong>Options:</strong></p>
+                        <ul>
+                          {r.options && r.options.map((option, idx) => (
+                            <li key={idx} className={option === r.correct ? "correct-option" : option === r.answer ? "selected-option" : ""}>
+                              {option} {option === r.correct && <span className="correct-indicator">✓</span>}
+                              {option === r.answer && option !== r.correct && <span className="incorrect-indicator">✗</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                       <div className="feedback-score-display">
                         {r.isCorrect ? "✓ Correct" : "✗ Incorrect"}
                       </div>
