@@ -357,11 +357,19 @@ function AIQuiz({ user, userProfile }) {
   const isMCQuestion = currentQuestion?.type === "multiple_choice";
 
   // -------------------- UI --------------------
-  if (loading && !questions.length)
+  if (loading)
     return (
       <div className="aiquiz-container">
         <div className="aiquiz-card">
-          <p className="loading">Generating your personalized quiz... please wait</p>
+          <div className="quiz-loading-container">
+            <div className="quiz-loading-animation"></div>
+            <p className="loading">{questions.length > 0 ? "Submitting your quiz... please wait" : "Generating your personalized quiz... please wait"}</p>
+            <div className="quiz-loading-dots">
+              <div className="quiz-loading-dot"></div>
+              <div className="quiz-loading-dot"></div>
+              <div className="quiz-loading-dot"></div>
+            </div>
+          </div>
         </div>
       </div>
     );
