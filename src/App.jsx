@@ -17,6 +17,7 @@ import GuidedRoutine from './GuidedRoutine'
 import VideoCall from './VideoCall'
 import ChatHistory from './ChatHistory'
 import QuizHistory from './QuizHistory'
+import QuizResults from './QuizResults'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -281,6 +282,16 @@ function App() {
         element={
           user ? (
             <QuizHistory user={user} />
+          ) : (
+            <Navigate to="/auth" replace />
+          )
+        }
+      />
+      <Route
+        path="/quiz-results/:quizId"
+        element={
+          user ? (
+            <QuizResults user={user} />
           ) : (
             <Navigate to="/auth" replace />
           )

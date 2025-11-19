@@ -11,7 +11,6 @@ function AIQuiz({ user, userProfile }) {
   const [userAnswers, setUserAnswers] = useState([]); // For MC questions
   const [oralTranscripts, setOralTranscripts] = useState([]); // For oral questions
   const [oralEvaluations, setOralEvaluations] = useState([]); // Store oral question evaluations
-  const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [quizId, setQuizId] = useState(null);
@@ -377,15 +376,24 @@ function AIQuiz({ user, userProfile }) {
       }
 
       const data = await res.json();
-      
-      setResult({
-        totalScore,
-        maxScore,
+
+      const resultPayload = {
+        quizId,
+        total_score: totalScore,
+        max_score: maxScore,
         percentage,
         responses,
         promoted: data.promoted || false,
-        newLevel: data.new_level
-      });
+        new_level: data.new_level,
+        total_questions: questions.length,
+        assessment_level: userProfile?.assessmentLevel || userProfile?.assessment_level,
+        attempted_at: new Date().toISOString(),
+      }
+
+      navigate(`/quiz-results/${quizId}`, {
+        state: { resultData: resultPayload },
+        replace: true,
+      })
 
     } catch (err) {
       console.error("Submission error:", err);
@@ -402,7 +410,6 @@ function AIQuiz({ user, userProfile }) {
     setOralTranscripts([]);
     setOralEvaluations([]);
     setCurrentIndex(0);
-    setResult(null);
     setQuizId(null);
     setTranscript("");
     setCurrentEvaluation(null);
@@ -448,121 +455,6 @@ function AIQuiz({ user, userProfile }) {
             ) : (
               <button onClick={resetQuiz} className="generate-btn">Try Again</button>
             )}
-          </div>
-        </div>
-      </div>
-    );
-
-  // After quiz submission
-  if (result)
-    return (
-      <div className="aiquiz-container">
-        <div className="aiquiz-card">
-          <div className="quiz-results-header">
-            <h2>🎯 Quiz Completed!</h2>
-            <p>Here's how you did on your assessment</p>
-          </div>
-          
-          <div className="quiz-results-summary">
-            <div className="circular-score-container">
-              <svg width="180" height="180">
-                <circle className="circular-score-bg" cx="90" cy="90" r="80"></circle>
-                <circle 
-                  className="circular-score-progress" 
-                  cx="90" 
-                  cy="90" 
-                  r="80"
-                  strokeDasharray={`${2 * Math.PI * 80}`}
-                  strokeDashoffset={`${2 * Math.PI * 80 * (1 - result.percentage / 100)}`}
-                ></circle>
-              </svg>
-              <div className="circular-score-text">
-                <div className="circular-score-value">{result.percentage}%</div>
-                <div className="circular-score-label">Score</div>
-              </div>
-            </div>
-            
-            <div className="score-breakdown">
-              <div className="score-item">
-                <div className="score-value">{result.totalScore}</div>
-                <div className="score-label">Your Points</div>
-              </div>
-              <div className="score-item">
-                <div className="score-value">{result.maxScore}</div>
-                <div className="score-label">Total Points</div>
-              </div>
-              <div className="score-item">
-                <div className="score-value">{result.responses.length}</div>
-                <div className="score-label">Questions</div>
-              </div>
-            </div>
-          </div>
-          
-          {result.promoted && (
-            <div className="promotion-banner">
-              🎉 Congratulations! You've been promoted to <strong>{result.newLevel}</strong> level!
-            </div>
-          )}
-
-          <div className="feedback-list">
-            {result.responses.map((r, i) => (
-              <div
-                key={i}
-                className={`feedback-item ${r.type === "multiple_choice" ? (r.isCorrect ? "correct" : "wrong") : ""}`}
-              >
-                <div className="feedback-item-header">
-                  <h3 className="feedback-item-title">Question {i + 1}</h3>
-                  <span className={`feedback-item-type ${r.type === "oral" ? "oral" : "mc"}`}>
-                    {r.type === "oral" ? "🎤 Oral" : "📝 MC"}
-                  </span>
-                </div>
-                
-                <div className="feedback-item-content">
-                  <p><strong>Question:</strong> {r.question}</p>
-                  {r.type === "multiple_choice" ? (
-                    <>
-                      <p><strong>Your Answer:</strong> {r.answer}</p>
-                      <p><strong>Correct Answer:</strong> {r.correct}</p>
-                      <div className="feedback-score-display">
-                        {r.isCorrect ? "✓ Correct" : "✗ Incorrect"}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <p><strong>Your Response:</strong> {r.transcript}</p>
-                      <div className="feedback-score-display">
-                        Score: {r.evaluation.score}/10
-                      </div>
-                      
-                      <div className="feedback-evaluation">
-                        <div className="feedback-evaluation-header">
-                          <h4 className="feedback-evaluation-title">Feedback</h4>
-                        </div>
-                        <div className="feedback-evaluation-content">
-                          <p>{r.evaluation.feedback}</p>
-                          
-                          {r.evaluation.suggestions && r.evaluation.suggestions.length > 0 && (
-                            <>
-                              <h4>Suggestions for Improvement:</h4>
-                              <ul>
-                                {r.evaluation.suggestions.map((s, idx) => (
-                                  <li key={idx}>{s}</li>
-                                ))}
-                              </ul>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ display: "flex", gap: "15px", justifyContent: "center", marginTop: "30px", flexWrap: "wrap" }}>
-            <button onClick={resetQuiz} className="generate-btn">Take Another Quiz 🔁</button>
-            <button onClick={() => navigate("/")} className="generate-btn" style={{ background: "linear-gradient(135deg, #6c757d, #5a6268)" }}>Back to Home</button>
           </div>
         </div>
       </div>

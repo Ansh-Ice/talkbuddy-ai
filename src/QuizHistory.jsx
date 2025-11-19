@@ -81,11 +81,10 @@ function QuizHistory({ user }) {
     }
   };
 
-  const [expandedQuizId, setExpandedQuizId] = useState(null);
-
-  const handleViewResults = (quizId) => {
-    // Toggle the details dropdown
-    setExpandedQuizId(expandedQuizId === quizId ? null : quizId);
+  const handleViewResults = (quiz) => {
+    navigate(`/quiz-results/${quiz.id}`, {
+      state: { resultData: quiz },
+    });
   };
 
   if (loading) {
@@ -185,45 +184,11 @@ function QuizHistory({ user }) {
                         {quiz.attempted ? (
                           <>
                             <button 
-                              onClick={() => handleViewResults(quiz.id)}
+                              onClick={() => handleViewResults(quiz)}
                               className="action-btn view-results-btn"
                             >
-                              {expandedQuizId === quiz.id ? "Hide Results" : "View Results"}
+                              View Results
                             </button>
-                            {expandedQuizId === quiz.id && (
-                            <div className="responses-list">
-                                {quiz.responses && quiz.responses.length > 0 ? (
-                                  quiz.responses.map((response, idx) => (
-                                    <div key={idx} className="response-item">
-                                      <p className="response-question">
-                                        <strong>Q{idx + 1} ({response.type === "oral" ? "🎤 Oral" : "📝 MC"}):</strong> {response.question}
-                                      </p>
-                                      {response.type === "multiple_choice" ? (
-                                        <>
-                                          <p className="response-answer">Your Answer: {response.answer}</p>
-                                          <p className={response.isCorrect ? "response-correct" : "response-wrong"}>
-                                            {response.isCorrect ? "✓ Correct" : "✗ Incorrect"} 
-                                            {!response.isCorrect && ` (Correct: ${response.correct})`}
-                                          </p>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <p className="response-answer">Your Response: {response.transcript}</p>
-                                          {response.evaluation && (
-                                            <>
-                                              <p className="response-score">Score: {response.evaluation.score}/10</p>
-                                              <p className="response-feedback">Feedback: {response.evaluation.feedback}</p>
-                                            </>
-                                          )}
-                                        </>
-                                      )}
-                                    </div>
-                                  ))
-                                ) : (
-                                  <p className="no-responses">No response details available.</p>
-                                )}
-                              </div>
-                            )}
                           </>
                         ) : (
                           <button 
