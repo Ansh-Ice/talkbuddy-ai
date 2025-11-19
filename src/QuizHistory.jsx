@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, query, where, orderBy, getDocs } from "firebase/firestore";
+import { collection, query, where, orderBy, getDocs, doc, getDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import "./QuizHistory.css";
 
@@ -55,6 +55,39 @@ function QuizHistory({ user }) {
     }).format(date);
   };
 
+  const getStatusBadge = (quiz) => {
+    if (quiz.attempted) {
+      return (
+        <span className="status-badge status-completed">
+          ✓ Completed
+        </span>
+      );
+    } else {
+      return (
+        <span className="status-badge status-missed">
+          ⏱ Missed
+        </span>
+      );
+    }
+  };
+
+  const handleAttemptQuiz = async (quizId) => {
+    try {
+      // Navigate to AIQuiz with quizId in state
+      navigate("/aiquiz", { state: { quizId } });
+    } catch (err) {
+      console.error("Error navigating to quiz:", err);
+      setError("Failed to load quiz. Please try again.");
+    }
+  };
+
+  const [expandedQuizId, setExpandedQuizId] = useState(null);
+
+  const handleViewResults = (quizId) => {
+    // Toggle the details dropdown
+    setExpandedQuizId(expandedQuizId === quizId ? null : quizId);
+  };
+
   if (loading) {
     return (
       <div className="quiz-history-container">
@@ -62,19 +95,23 @@ function QuizHistory({ user }) {
           <h1>📚 Your AI Quiz History</h1>
           <button onClick={() => navigate("/")} className="back-btn">← Back to Home</button>
         </div>
-        <p className="loading">Loading your quiz history...</p>
+        <div className="loading-container">
+          <p className="loading">Loading your quiz history...</p>
+        </div>
       </div>
     );
   }
 
-  if (error) {
+  if (error && quizzes.length === 0) {
     return (
       <div className="quiz-history-container">
         <div className="quiz-history-header">
           <h1>📚 Your AI Quiz History</h1>
           <button onClick={() => navigate("/")} className="back-btn">← Back to Home</button>
         </div>
-        <p className="error">{error}</p>
+        <div className="error-container">
+          <p className="error">{error}</p>
+        </div>
       </div>
     );
   }
@@ -94,84 +131,115 @@ function QuizHistory({ user }) {
           </button>
         </div>
       ) : (
-        <div className="quizzes-grid">
-          {quizzes.map((quiz) => (
-            <div key={quiz.id} className="quiz-card">
-              <div className="quiz-card-header">
-                <div className="quiz-level-badge">{quiz.assessment_level || "BASIC"}</div>
-                <div className="quiz-date">{formatDate(quiz.created_at)}</div>
-              </div>
-              
-              <div className="quiz-stats">
-                <div className="stat-item">
-                  <span className="stat-label">Total Questions:</span>
-                  <span className="stat-value">{quiz.total_questions || 0}</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label">MC Questions:</span>
-                  <span className="stat-value">{quiz.mc_questions || 0}</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label">Oral Questions:</span>
-                  <span className="stat-value">{quiz.oral_questions || 0}</span>
-                </div>
-              </div>
-
-              {quiz.attempted ? (
-                <div className="quiz-results">
-                  <div className="result-header">
-                    <span className="result-label">Score:</span>
-                    <span className="result-percentage">{quiz.percentage || 0}%</span>
-                  </div>
-                  <div className="result-details">
-                    <p>Total Score: {quiz.total_score || 0} / {quiz.total_questions * 10 || 0}</p>
-                    <p className="attempt-date">Attempted: {formatDate(quiz.attempted_at)}</p>
-                  </div>
-                  
-                  {quiz.responses && quiz.responses.length > 0 && (
-                    <details className="quiz-details">
-                      <summary>View Details</summary>
-                      <div className="responses-list">
-                        {quiz.responses.map((response, idx) => (
-                          <div key={idx} className="response-item">
-                            <p><strong>Q{idx + 1} ({response.type}):</strong> {response.question}</p>
-                            {response.type === "multiple_choice" ? (
-                              <>
-                                <p>Your Answer: {response.answer}</p>
-                                <p className={response.isCorrect ? "correct" : "wrong"}>
-                                  {response.isCorrect ? "✓ Correct" : "✗ Incorrect"} (Correct: {response.correct})
-                                </p>
-                              </>
-                            ) : (
-                              <>
-                                <p>Your Response: {response.transcript}</p>
-                                {response.evaluation && (
-                                  <>
-                                    <p>Score: {response.evaluation.score}/10</p>
-                                    <p>Feedback: {response.evaluation.feedback}</p>
-                                  </>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        ))}
+        <div className="quiz-history-content">
+          <div className="quiz-table-wrapper">
+            <table className="quiz-table">
+              <thead>
+                <tr>
+                  <th>Date Created</th>
+                  <th>Level</th>
+                  <th>Questions</th>
+                  <th>Status</th>
+                  <th>Score</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {quizzes.map((quiz) => (
+                  <tr key={quiz.id} className="quiz-row">
+                    <td className="quiz-date-cell">
+                      <div className="date-primary">{formatDate(quiz.created_at)}</div>
+                      {quiz.attempted && quiz.attempted_at && (
+                        <div className="date-secondary">Attempted: {formatDate(quiz.attempted_at)}</div>
+                      )}
+                    </td>
+                    <td>
+                      <span className="level-badge">{quiz.assessment_level || "BASIC"}</span>
+                    </td>
+                    <td>
+                      <div className="questions-info">
+                        <span className="question-count">{quiz.total_questions || 0} Total</span>
+                        <div className="question-breakdown">
+                          <span className="mc-count">📝 {quiz.mc_questions || 0} MC</span>
+                          <span className="oral-count">🎤 {quiz.oral_questions || 0} Oral</span>
+                        </div>
                       </div>
-                    </details>
-                  )}
-                </div>
-              ) : (
-                <div className="quiz-not-attempted">
-                  <p>Not yet attempted</p>
-                  <button 
-                    onClick={() => navigate("/aiquiz")} 
-                    className="take-quiz-btn"
-                  >
-                    Take This Quiz
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
+                    </td>
+                    <td>
+                      {getStatusBadge(quiz)}
+                    </td>
+                    <td>
+                      {quiz.attempted ? (
+                        <div className="score-display">
+                          <span className="score-percentage">{quiz.percentage || 0}%</span>
+                          <span className="score-detail">
+                            {quiz.total_score || 0} / {quiz.total_questions * 10 || 0}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="score-placeholder">—</span>
+                      )}
+                    </td>
+                    <td>
+                      <div className="action-buttons">
+                        {quiz.attempted ? (
+                          <>
+                            <button 
+                              onClick={() => handleViewResults(quiz.id)}
+                              className="action-btn view-results-btn"
+                            >
+                              {expandedQuizId === quiz.id ? "Hide Results" : "View Results"}
+                            </button>
+                            {expandedQuizId === quiz.id && (
+                            <div className="responses-list">
+                                {quiz.responses && quiz.responses.length > 0 ? (
+                                  quiz.responses.map((response, idx) => (
+                                    <div key={idx} className="response-item">
+                                      <p className="response-question">
+                                        <strong>Q{idx + 1} ({response.type === "oral" ? "🎤 Oral" : "📝 MC"}):</strong> {response.question}
+                                      </p>
+                                      {response.type === "multiple_choice" ? (
+                                        <>
+                                          <p className="response-answer">Your Answer: {response.answer}</p>
+                                          <p className={response.isCorrect ? "response-correct" : "response-wrong"}>
+                                            {response.isCorrect ? "✓ Correct" : "✗ Incorrect"} 
+                                            {!response.isCorrect && ` (Correct: ${response.correct})`}
+                                          </p>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <p className="response-answer">Your Response: {response.transcript}</p>
+                                          {response.evaluation && (
+                                            <>
+                                              <p className="response-score">Score: {response.evaluation.score}/10</p>
+                                              <p className="response-feedback">Feedback: {response.evaluation.feedback}</p>
+                                            </>
+                                          )}
+                                        </>
+                                      )}
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="no-responses">No response details available.</p>
+                                )}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <button 
+                            onClick={() => handleAttemptQuiz(quiz.id)}
+                            className="action-btn attempt-btn"
+                          >
+                            Attempt Now
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

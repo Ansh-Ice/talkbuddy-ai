@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { db } from "./firebase";
-import confetti from "canvas-confetti";
+import { doc, getDoc } from "firebase/firestore";
 import "./AIQuiz.css";
 import "./OralQuestion.css";
 
@@ -23,6 +23,63 @@ function AIQuiz({ user, userProfile }) {
   const [currentEvaluation, setCurrentEvaluation] = useState(null);
   const recognitionRef = useRef(null);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Load existing quiz from Firestore when navigating from quiz history
+  useEffect(() => {
+    const loadExistingQuiz = async () => {
+      // Check if quizId was passed via navigation state
+      const passedQuizId = location.state?.quizId;
+      
+      if (!passedQuizId || !user) {
+        return; // No quiz to load, or user not logged in
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        // Load quiz from Firestore
+        const quizRef = doc(db, "users", user.uid, "ai_quizzes", passedQuizId);
+        const quizDoc = await getDoc(quizRef);
+
+        if (!quizDoc.exists()) {
+          throw new Error("Quiz not found. It may have been deleted.");
+        }
+
+        const quizData = quizDoc.data();
+
+        // Check if quiz was already attempted
+        if (quizData.attempted) {
+          setError("This quiz has already been completed. Please select a different quiz.");
+          setLoading(false);
+          return;
+        }
+
+        // Check if questions exist
+        if (!quizData.questions || !Array.isArray(quizData.questions) || quizData.questions.length === 0) {
+          throw new Error("Quiz questions not found. Please generate a new quiz.");
+        }
+
+        // Load the quiz and automatically start it
+        setQuestions(quizData.questions);
+        setQuizId(passedQuizId);
+        setUserAnswers(Array(quizData.questions.length).fill(""));
+        setOralTranscripts(Array(quizData.questions.length).fill(""));
+        setOralEvaluations(Array(quizData.questions.length).fill(null));
+        setCurrentIndex(0);
+        setError(null); // Clear any previous errors
+
+      } catch (err) {
+        console.error("Error loading quiz:", err);
+        setError(err.message || "Failed to load quiz. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadExistingQuiz();
+  }, [location.state, user]);
 
   // Initialize speech recognition
   useEffect(() => {
@@ -263,7 +320,6 @@ function AIQuiz({ user, userProfile }) {
             type: "multiple_choice",
             answer: userAnswers[i],
             correct: q.correct,
-            options: q.options,
             isCorrect: isCorrect
           });
           
@@ -381,44 +437,23 @@ function AIQuiz({ user, userProfile }) {
       <div className="aiquiz-container">
         <div className="aiquiz-card">
           <p className="error">{error}</p>
-          <button onClick={resetQuiz} className="generate-btn" style={{ marginTop: "20px" }}>Try Again</button>
+          <div style={{ display: "flex", gap: "15px", justifyContent: "center", marginTop: "20px", flexWrap: "wrap" }}>
+            {location.state?.quizId ? (
+              <>
+                <button onClick={() => navigate("/quiz-history")} className="generate-btn" style={{ background: "linear-gradient(135deg, #6c757d, #5a6268)" }}>
+                  Back to Quiz History
+                </button>
+                <button onClick={resetQuiz} className="generate-btn">Try Again</button>
+              </>
+            ) : (
+              <button onClick={resetQuiz} className="generate-btn">Try Again</button>
+            )}
+          </div>
         </div>
       </div>
     );
 
   // After quiz submission
-  useEffect(() => {
-    if (result && result.percentage > 50) {
-      const duration = 5 * 1000;
-      const animationEnd = Date.now() + duration;
-      const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
-
-      const randomInRange = (min, max) => Math.random() * (max - min) + min;
-
-      const interval = setInterval(() => {
-        const timeLeft = animationEnd - Date.now();
-
-        if (timeLeft <= 0) {
-          return clearInterval(interval);
-        }
-
-        const particleCount = 50 * (timeLeft / duration);
-        confetti(
-          Object.assign({}, defaults, {
-            particleCount,
-            origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
-          })
-        );
-        confetti(
-          Object.assign({}, defaults, {
-            particleCount,
-            origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
-          })
-        );
-      }, 250);
-    }
-  }, [result]);
-
   if (result)
     return (
       <div className="aiquiz-container">
@@ -486,17 +521,8 @@ function AIQuiz({ user, userProfile }) {
                   <p><strong>Question:</strong> {r.question}</p>
                   {r.type === "multiple_choice" ? (
                     <>
-                      <div className="question-options">
-                        <p><strong>Options:</strong></p>
-                        <ul>
-                          {r.options && r.options.map((option, idx) => (
-                            <li key={idx} className={option === r.correct ? "correct-option" : option === r.answer ? "selected-option" : ""}>
-                              {option} {option === r.correct && <span className="correct-indicator">✓</span>}
-                              {option === r.answer && option !== r.correct && <span className="incorrect-indicator">✗</span>}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                      <p><strong>Your Answer:</strong> {r.answer}</p>
+                      <p><strong>Correct Answer:</strong> {r.correct}</p>
                       <div className="feedback-score-display">
                         {r.isCorrect ? "✓ Correct" : "✗ Incorrect"}
                       </div>
