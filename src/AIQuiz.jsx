@@ -389,13 +389,43 @@ function AIQuiz({ user, userProfile }) {
     return (
       <div className="aiquiz-container">
         <div className="aiquiz-card">
-          <div className="aiquiz-header">
+          <div className="quiz-results-header">
             <h2>🎯 Quiz Completed!</h2>
+            <p>Here's how you did on your assessment</p>
           </div>
           
-          <div style={{ textAlign: "center", marginBottom: "25px" }}>
-            <div className="score-display">
-              Score: {result.totalScore}/{result.maxScore} ({result.percentage}%)
+          <div className="quiz-results-summary">
+            <div className="circular-score-container">
+              <svg width="180" height="180">
+                <circle className="circular-score-bg" cx="90" cy="90" r="80"></circle>
+                <circle 
+                  className="circular-score-progress" 
+                  cx="90" 
+                  cy="90" 
+                  r="80"
+                  strokeDasharray={`${2 * Math.PI * 80}`}
+                  strokeDashoffset={`${2 * Math.PI * 80 * (1 - result.percentage / 100)}`}
+                ></circle>
+              </svg>
+              <div className="circular-score-text">
+                <div className="circular-score-value">{result.percentage}%</div>
+                <div className="circular-score-label">Score</div>
+              </div>
+            </div>
+            
+            <div className="score-breakdown">
+              <div className="score-item">
+                <div className="score-value">{result.totalScore}</div>
+                <div className="score-label">Your Points</div>
+              </div>
+              <div className="score-item">
+                <div className="score-value">{result.maxScore}</div>
+                <div className="score-label">Total Points</div>
+              </div>
+              <div className="score-item">
+                <div className="score-value">{result.responses.length}</div>
+                <div className="score-label">Questions</div>
+              </div>
             </div>
           </div>
           
@@ -411,31 +441,52 @@ function AIQuiz({ user, userProfile }) {
                 key={i}
                 className={`feedback-item ${r.type === "multiple_choice" ? (r.isCorrect ? "correct" : "wrong") : ""}`}
               >
-                <p>
-                  <strong>Q{i + 1} ({r.type === "oral" ? "Oral" : "Multiple Choice"}):</strong> {r.question}
-                </p>
-                {r.type === "multiple_choice" ? (
-                  <>
-                    <p><strong>Your Answer:</strong> {r.answer}</p>
-                    <p><strong>Correct Answer:</strong> {r.correct}</p>
-                  </>
-                ) : (
-                  <>
-                    <p><strong>Your Response:</strong> {r.transcript}</p>
-                    <p><strong>Score:</strong> {r.evaluation.score}/10</p>
-                    <p><strong>Feedback:</strong> {r.evaluation.feedback}</p>
-                    {r.evaluation.suggestions && r.evaluation.suggestions.length > 0 && (
-                      <div className="suggestions">
-                        <strong>Suggestions:</strong>
-                        <ul>
-                          {r.evaluation.suggestions.map((s, idx) => (
-                            <li key={idx}>{s}</li>
-                          ))}
-                        </ul>
+                <div className="feedback-item-header">
+                  <h3 className="feedback-item-title">Question {i + 1}</h3>
+                  <span className={`feedback-item-type ${r.type === "oral" ? "oral" : "mc"}`}>
+                    {r.type === "oral" ? "🎤 Oral" : "📝 MC"}
+                  </span>
+                </div>
+                
+                <div className="feedback-item-content">
+                  <p><strong>Question:</strong> {r.question}</p>
+                  {r.type === "multiple_choice" ? (
+                    <>
+                      <p><strong>Your Answer:</strong> {r.answer}</p>
+                      <p><strong>Correct Answer:</strong> {r.correct}</p>
+                      <div className="feedback-score-display">
+                        {r.isCorrect ? "✓ Correct" : "✗ Incorrect"}
                       </div>
-                    )}
-                  </>
-                )}
+                    </>
+                  ) : (
+                    <>
+                      <p><strong>Your Response:</strong> {r.transcript}</p>
+                      <div className="feedback-score-display">
+                        Score: {r.evaluation.score}/10
+                      </div>
+                      
+                      <div className="feedback-evaluation">
+                        <div className="feedback-evaluation-header">
+                          <h4 className="feedback-evaluation-title">Feedback</h4>
+                        </div>
+                        <div className="feedback-evaluation-content">
+                          <p>{r.evaluation.feedback}</p>
+                          
+                          {r.evaluation.suggestions && r.evaluation.suggestions.length > 0 && (
+                            <>
+                              <h4>Suggestions for Improvement:</h4>
+                              <ul>
+                                {r.evaluation.suggestions.map((s, idx) => (
+                                  <li key={idx}>{s}</li>
+                                ))}
+                              </ul>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             ))}
           </div>
