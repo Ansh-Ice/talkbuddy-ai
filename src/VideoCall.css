@@ -77,7 +77,7 @@
 }
 
 .ai-avatar-container {
-  height: 70vh;
+  height: 60vh;
   border-radius: 24px;
   background: radial-gradient(circle at 30% 30%, rgba(99, 102, 241, 0.8), rgba(15, 23, 42, 0.6));
   display: flex;
@@ -140,10 +140,10 @@
 
 .user-video-corner {
   position: absolute;
-  bottom: 120px;
-  right: 30px;
-  width: 300px;
-  height: 225px;
+  bottom: 20px;
+  right: 20px;
+  width: 200px;
+  height: 150px;
   z-index: 10;
   border-radius: 16px;
   overflow: hidden;
@@ -212,7 +212,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  height: 70vh;
+  height: 60vh;
 }
 
 .voice-messages {
@@ -482,7 +482,7 @@
     bottom: auto;
     right: auto;
     width: 100%;
-    height: 250px;
+    height: 200px;
     margin-bottom: 20px;
     border-radius: 12px;
   }
@@ -521,6 +521,6 @@
   
   .user-video-corner {
     width: 100%;
-    height: 180px;
+    height: 150px;
   }
 }
