@@ -769,6 +769,23 @@ const VideoCall = () => {
                 mood={mood} 
               />
             </Canvas>
+            {/* User video in corner - now inside the avatar container to overlap the 3D model */}
+            <div className="user-video-corner">
+              <div className="video-wrapper">
+                {!streamError ? (
+                  <>
+                    <video ref={videoRef} autoPlay playsInline muted />
+                    <canvas ref={canvasRef} className="landmark-canvas" />
+                  </>
+                ) : (
+                  <div className="video-error">
+                    <CameraOff size={28} />
+                    <p>{streamError}</p>
+                  </div>
+                )
+              }
+              </div>
+            </div>
           </div>
 
           <div className="mood-card" style={{ borderColor: mood.color }}>
@@ -877,21 +894,8 @@ const VideoCall = () => {
         </section>
       </div>
 
-      {/* User video in corner - moved outside the main layout */}
-      <div className="user-video-corner">
-        <div className="video-wrapper">
-          {!streamError ? (
-            <>
-              <video ref={videoRef} autoPlay playsInline muted />
-              <canvas ref={canvasRef} className="landmark-canvas" />
-            </>
-          ) : (
-            <div className="video-error">
-              <CameraOff size={28} />
-              <p>{streamError}</p>
-            </div>
-          )}
-        </div>
+      {/* User video hint moved to inside the avatar container */}
+      {streamError && (
         <div className="video-hint">
           {streamError ? (
             <p>
@@ -904,7 +908,7 @@ const VideoCall = () => {
             <p>Stay within the frame so we can read your expression accurately.</p>
           )}
         </div>
-      </div>
+      )}
 
       {streamError && (
         <div className="video-alert">
