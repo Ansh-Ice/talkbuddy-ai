@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { 
   signOut, 
   updateProfile, 
-  updateEmail, 
   updatePassword,
   sendPasswordResetEmail
 } from "firebase/auth";
@@ -20,15 +19,13 @@ export default function ProfileSidebar({ user, isOpen, onClose }) {
 
   // Form state
   const [formData, setFormData] = useState({
-    displayName: user?.displayName || "",
-    email: user?.email || ""
+    displayName: user?.displayName || ""
   });
 
   useEffect(() => {
     if (user && isOpen) {
       setFormData({
-        displayName: user.displayName || "",
-        email: user.email || ""
+        displayName: user.displayName || ""
       });
       loadChatHistory();
     }
@@ -51,10 +48,13 @@ export default function ProfileSidebar({ user, isOpen, onClose }) {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    // Only allow updating displayName, not email
+    if (name === "displayName") {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   const handleSaveProfile = async (e) => {
@@ -64,28 +64,16 @@ export default function ProfileSidebar({ user, isOpen, onClose }) {
     setSuccess("");
 
     try {
-      const updates = [];
-
-      // Update display name
+      // Only update display name since we're restricting email editing
       if (formData.displayName !== user.displayName) {
         await updateProfile(user, {
           displayName: formData.displayName
         });
-        updates.push("Display name updated");
-      }
-
-      // Update email
-      if (formData.email !== user.email) {
-        await updateEmail(user, formData.email);
-        updates.push("Email updated");
-      }
-
-      if (updates.length > 0) {
-        setSuccess(updates.join(", "));
-        setIsEditing(false);
+        setSuccess("Display name updated");
       } else {
         setSuccess("No changes to save");
       }
+      setIsEditing(false);
     } catch (error) {
       setError(error.message);
     } finally {
@@ -243,18 +231,6 @@ const handleChangePassword = async () => {
                   />
                 </div>
 
-                <div className="form-field">
-                  <label htmlFor="email">Email</label>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    placeholder="Enter your email"
-                  />
-                </div>
-
                 <div className="form-actions">
                   <button 
                     type="button" 
@@ -264,8 +240,7 @@ const handleChangePassword = async () => {
                       setError("");
                       setSuccess("");
                       setFormData({
-                        displayName: user.displayName || "",
-                        email: user.email || ""
+                        displayName: user.displayName || ""
                       });
                     }}
                   >
