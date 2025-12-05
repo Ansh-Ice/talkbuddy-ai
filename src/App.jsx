@@ -57,6 +57,39 @@ function App() {
     }
   }
 
+  // 🔹 Update user's last active timestamp
+  const updateUserActivity = useCallback(async (uid) => {
+    if (!uid) return
+    try {
+      await updateDoc(doc(db, "users", uid), {
+        lastActive: serverTimestamp()
+      })
+    } catch (err) {
+      console.warn("Unable to update lastActive:", err)
+    }
+  }, [])
+
+  // 🔹 Periodically update user activity while they are active
+  useEffect(() => {
+    let activityInterval
+    
+    if (user?.uid) {
+      // Update immediately when user becomes active
+      updateUserActivity(user.uid)
+      
+      // Then update every minute
+      activityInterval = setInterval(() => {
+        updateUserActivity(user.uid)
+      }, 60 * 1000) // Every minute
+    }
+    
+    return () => {
+      if (activityInterval) {
+        clearInterval(activityInterval)
+      }
+    }
+  }, [user, updateUserActivity])
+
   // 🔹 Listen for auth changes with debouncing
   useEffect(() => {
     let timeoutId

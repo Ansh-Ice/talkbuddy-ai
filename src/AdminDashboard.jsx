@@ -34,32 +34,38 @@ const AdminDashboard = () => {
 
   // Check admin session
   useEffect(() => {
-  const adminSession = localStorage.getItem('adminSession');
-  if (!adminSession) {
-    navigate('/admin/login', { replace: true });
-    return;
-  }
+    const adminSession = localStorage.getItem('adminSession');
+    if (!adminSession) {
+      navigate('/admin/login', { replace: true });
+      return;
+    }
 
-  const sessionData = JSON.parse(adminSession);
-  if (Date.now() - sessionData.loginTime > 24 * 60 * 60 * 1000) {
-    localStorage.removeItem('adminSession');
-    navigate('/admin/login', { replace: true });
-    return;
-  }
+    const sessionData = JSON.parse(adminSession);
+    if (Date.now() - sessionData.loginTime > 24 * 60 * 60 * 1000) {
+      localStorage.removeItem('adminSession');
+      navigate('/admin/login', { replace: true });
+      return;
+    }
 
-  // Remove dashboard from history (fix forward button)
-  navigate(window.location.pathname, { replace: true });
+    // Remove dashboard from history (fix forward button)
+    navigate(window.location.pathname, { replace: true });
 
-  // Back button logout
-  window.history.pushState(null, '', window.location.href);
-  window.onpopstate = () => {
-    localStorage.removeItem('adminSession');
-    navigate('/admin/login', { replace: true });
-  };
+    // Back button logout
+    window.history.pushState(null, '', window.location.href);
+    window.onpopstate = () => {
+      localStorage.removeItem('adminSession');
+      navigate('/admin/login', { replace: true });
+    };
 
-  loadDashboardData();
-}, [navigate]);
-
+    loadDashboardData();
+    
+    // Refresh data every 30 seconds
+    const interval = setInterval(loadDashboardData, 30 * 1000);
+    
+    return () => {
+      clearInterval(interval);
+    };
+  }, [navigate]);
 
 
 
@@ -71,17 +77,17 @@ const AdminDashboard = () => {
       const usersSnapshot = await getDocs(collection(db, 'users'));
       const totalUsers = usersSnapshot.size;
 
-      // Get users who logged in today (simulate online users)
-      const now = Date.now();
-      const twoMinutesAgo = now - 2 * 60 * 1000;
+      // Get users who were active in the last 2 minutes
+      const now = new Date();
+      const twoMinutesAgo = new Date(now.getTime() - 2 * 60 * 1000);
 
       const onlineUsersQuery = query(
-      collection(db, "users"),
-    where("lastActive", ">=", twoMinutesAgo)
-    );
+        collection(db, "users"),
+        where("lastActive", ">=", twoMinutesAgo)
+      );
 
-    const onlineUsersSnapshot = await getDocs(onlineUsersQuery);
-    const onlineUsers = onlineUsersSnapshot.size;
+      const onlineUsersSnapshot = await getDocs(onlineUsersQuery);
+      const onlineUsers = onlineUsersSnapshot.size;
 
 
       // Get total quizzes (if you have a quizzes collection)
