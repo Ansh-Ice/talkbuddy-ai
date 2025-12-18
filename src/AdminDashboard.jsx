@@ -13,7 +13,7 @@ import {
   UserPlus
 } from 'lucide-react';
 import { db } from './firebase';
-import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, limit, doc, getDoc } from 'firebase/firestore';
 import AdminReports from './AdminReports';
 import AdminCharts from './AdminCharts';
 import QuizManagement from './QuizManagement';
@@ -30,6 +30,7 @@ const AdminDashboard = () => {
     recentActivity: []
   });
   const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState(null);
   const navigate = useNavigate();
 
   // Check admin session
@@ -41,6 +42,8 @@ const AdminDashboard = () => {
     }
 
     const sessionData = JSON.parse(adminSession);
+    setSession(sessionData);
+    
     if (Date.now() - sessionData.loginTime > 24 * 60 * 60 * 1000) {
       localStorage.removeItem('adminSession');
       navigate('/admin/login', { replace: true });
@@ -62,12 +65,56 @@ const AdminDashboard = () => {
     // Refresh data every 30 seconds
     const interval = setInterval(loadDashboardData, 30 * 1000);
     
+    // Check if admin still exists every 30 seconds
+    const adminCheckInterval = setInterval(checkAdminExists, 30 * 1000);
+    
     return () => {
       clearInterval(interval);
+      clearInterval(adminCheckInterval);
     };
   }, [navigate]);
 
+  // Check if current admin still exists in the database
+  const checkAdminExists = async () => {
+    try {
+      const adminSession = localStorage.getItem('adminSession');
+      if (!adminSession) {
+        handleLogout();
+        return;
+      }
 
+      const sessionData = JSON.parse(adminSession);
+      const normalizedUsername = (sessionData.username || '').trim().toLowerCase();
+      
+      // Try to find admin by docId first
+      if (sessionData.docId) {
+        try {
+          const adminDoc = await getDoc(doc(db, 'admin', sessionData.docId));
+          if (!adminDoc.exists()) {
+            // Admin document doesn't exist, logout
+            handleLogout();
+            return;
+          }
+        } catch (error) {
+          console.warn('Error checking admin by docId:', error);
+        }
+      }
+      
+      // Fallback: check by username
+      const adminSnapshot = await getDocs(collection(db, 'admin'));
+      const adminExists = adminSnapshot.docs.some(docSnap => {
+        const candidate = (docSnap.data().username || docSnap.id || '').trim().toLowerCase();
+        return candidate === normalizedUsername;
+      });
+      
+      if (!adminExists) {
+        // Admin no longer exists, logout
+        handleLogout();
+      }
+    } catch (error) {
+      console.error('Error checking admin existence:', error);
+    }
+  };
 
   const loadDashboardData = async () => {
     try {
@@ -88,7 +135,6 @@ const AdminDashboard = () => {
 
       const onlineUsersSnapshot = await getDocs(onlineUsersQuery);
       const onlineUsers = onlineUsersSnapshot.size;
-
 
       // Get total quizzes (if you have a quizzes collection)
       // const quizzesSnapshot = await getDocs(collection(db, 'quizQuestions'));
