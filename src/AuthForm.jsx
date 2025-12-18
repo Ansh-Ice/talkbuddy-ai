@@ -92,14 +92,13 @@ const AuthForm = () => {
       // Admin login via Firestore (only when username style without @)
       if (!isRegister && isAdminUsername) {
         try {
-          const cfgRef = doc(db, 'admin', 'config');
-          let cfgSnap = await getDoc(cfgRef);
-          if (!cfgSnap.exists()) {
+          // Only create default admin if no admins exist at all
+          const adminDocsSnapshot = await getDocs(collection(db, 'admin'));
+          if (adminDocsSnapshot.empty) {
+            const cfgRef = doc(db, 'admin', 'config');
             await setDoc(cfgRef, { username: 'sneh', password: 'sneh123', seededAt: Date.now() }, { merge: true });
-            cfgSnap = await getDoc(cfgRef);
           }
 
-          const adminDocsSnapshot = await getDocs(collection(db, 'admin'));
           const adminRecords = adminDocsSnapshot.docs.map(docSnap => ({
             id: docSnap.id,
             ...(docSnap.data() || {})
