@@ -79,21 +79,27 @@ const AdminDashboard = () => {
     try {
       const adminSession = localStorage.getItem('adminSession');
       if (!adminSession) {
+        console.log('No admin session found, logging out');
         handleLogout();
         return;
       }
 
       const sessionData = JSON.parse(adminSession);
       const normalizedUsername = (sessionData.username || '').trim().toLowerCase();
+      console.log('Checking if admin exists:', normalizedUsername);
       
       // Try to find admin by docId first
       if (sessionData.docId) {
         try {
+          console.log('Checking admin by docId:', sessionData.docId);
           const adminDoc = await getDoc(doc(db, 'admin', sessionData.docId));
           if (!adminDoc.exists()) {
+            console.log('Admin document does not exist, logging out');
             // Admin document doesn't exist, logout
             handleLogout();
             return;
+          } else {
+            console.log('Admin document exists');
           }
         } catch (error) {
           console.warn('Error checking admin by docId:', error);
@@ -107,12 +113,17 @@ const AdminDashboard = () => {
         return candidate === normalizedUsername;
       });
       
+      console.log('Admin exists in collection:', adminExists);
+      
       if (!adminExists) {
         // Admin no longer exists, logout
+        console.log('Admin no longer exists in database, logging out');
         handleLogout();
       }
     } catch (error) {
       console.error('Error checking admin existence:', error);
+      // In case of error, logout for security
+      handleLogout();
     }
   };
 
@@ -167,6 +178,7 @@ const AdminDashboard = () => {
   };
 
   const handleLogout = () => {
+    console.log('Logging out admin');
     localStorage.removeItem('adminSession');
     navigate('/admin/login', { replace: true });
   };

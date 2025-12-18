@@ -175,15 +175,28 @@ const AdminAccountManager = () => {
 
   const validateNewAdmin = async (username) => {
     const normalized = username.trim().toLowerCase();
+    
+    // Check if username is empty
+    if (!normalized) {
+      throw new Error('Username is required.');
+    }
+    
+    // Check if username contains @ symbol
+    if (normalized.includes('@')) {
+      throw new Error('Username cannot contain @ or look like an email.');
+    }
+    
+    // Check if admin with this username already exists by checking all documents
     const adminSnapshot = await getDocs(collection(db, 'admin'));
-    const existsInAdmin = adminSnapshot.docs.some(docSnap => {
-      const candidate = (docSnap.data().username || docSnap.id || '').trim().toLowerCase();
-      return candidate === normalized;
-    });
-    if (existsInAdmin) {
-      throw new Error('An admin with this username already exists.');
+    for (const docSnap of adminSnapshot.docs) {
+      const data = docSnap.data();
+      const candidate = (data.username || docSnap.id || '').trim().toLowerCase();
+      if (candidate === normalized) {
+        throw new Error('An admin with this username already exists.');
+      }
     }
 
+    // Check if username conflicts with registered user emails
     const registeredMatch = await getDocs(
       query(collection(db, 'registeredEmails'), where('email', '==', username.trim()))
     );
@@ -218,6 +231,15 @@ const AdminAccountManager = () => {
       await validateNewAdmin(username);
       const normalized = username.toLowerCase();
       const docId = normalized === 'config' ? `config_${Date.now()}` : normalized;
+      
+      // Double-check that admin doesn't already exist before creating
+      const existingDoc = await getDoc(doc(db, 'admin', docId));
+      if (existingDoc.exists()) {
+        setAdminStatus({ type: 'error', message: 'An admin with this username already exists.' });
+        setCreatingAdmin(false);
+        return;
+      }
+      
       await setDoc(doc(db, 'admin', docId), {
         username,
         password: addForm.password.trim(),
