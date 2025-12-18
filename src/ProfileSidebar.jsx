@@ -14,8 +14,6 @@ export default function ProfileSidebar({ user, isOpen, onClose }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [chatHistory, setChatHistory] = useState([]);
-  const [showChatHistory, setShowChatHistory] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -27,24 +25,8 @@ export default function ProfileSidebar({ user, isOpen, onClose }) {
       setFormData({
         displayName: user.displayName || ""
       });
-      loadChatHistory();
     }
   }, [user, isOpen]);
-
-  const loadChatHistory = async () => {
-    try {
-      const chatHistoryRef = collection(db, "chatHistory");
-      const q = query(chatHistoryRef, where("userId", "==", user.uid));
-      const querySnapshot = await getDocs(q);
-      const history = [];
-      querySnapshot.forEach((doc) => {
-        history.push({ id: doc.id, ...doc.data() });
-      });
-      setChatHistory(history.sort((a, b) => b.timestamp - a.timestamp));
-    } catch (error) {
-      console.error("Error loading chat history:", error);
-    }
-  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -164,22 +146,6 @@ const handleChangePassword = async () => {
     }
   };
 
-  const clearChatHistory = async () => {
-    try {
-      const chatHistoryRef = collection(db, "chatHistory");
-      const q = query(chatHistoryRef, where("userId", "==", user.uid));
-      const querySnapshot = await getDocs(q);
-      
-      const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
-      await Promise.all(deletePromises);
-      
-      setChatHistory([]);
-      setSuccess("Chat history cleared successfully");
-    } catch (error) {
-      setError("Failed to clear chat history: " + error.message);
-    }
-  };
-
   const formatDate = (timestamp) => {
     return new Date(timestamp).toLocaleString();
   };
@@ -279,52 +245,6 @@ const handleChangePassword = async () => {
                   <label>Last Sign In:</label>
                   <span>{formatDate(user.metadata.lastSignInTime)}</span>
                 </div>
-              </div>
-            )}
-          </div>
-
-          <div className="profile-section">
-            <div className="section-header">
-              <h3>Chat History</h3>
-              <div className="section-actions">
-                <button 
-                  className="toggle-btn" 
-                  onClick={() => setShowChatHistory(!showChatHistory)}
-                >
-                  {showChatHistory ? 'Hide' : 'Show'}
-                </button>
-                {chatHistory.length > 0 && (
-                  <button 
-                    className="clear-btn" 
-                    onClick={clearChatHistory}
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {showChatHistory && (
-              <div className="chat-history">
-                {chatHistory.length === 0 ? (
-                  <p className="no-data">No chat history found.</p>
-                ) : (
-                  <div className="chat-list">
-                    {chatHistory.map((chat) => (
-                      <div key={chat.id} className="chat-item">
-                        <div className="chat-header">
-                          <span className="chat-date">{formatDate(chat.timestamp)}</span>
-                          <span className="chat-messages-count">
-                            {chat.messages?.length || 0} messages
-                          </span>
-                        </div>
-                        {chat.title && (
-                          <div className="chat-title">{chat.title}</div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             )}
           </div>
