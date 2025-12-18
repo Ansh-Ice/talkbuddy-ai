@@ -1585,3 +1585,143 @@
     display: none;
   }
 }
+
+/* Admin List Styles */
+.admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #f8f9fa;
+  border-radius: 10px;
+  border: 1px solid #e9ecef;
+}
+
+.admin-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.admin-username {
+  font-size: 15px;
+}
+
+.current-admin-tag {
+  font-size: 12px;
+  color: #667eea;
+  background: #e8f2ff;
+  padding: 2px 8px;
+  border-radius: 20px;
+  margin-left: 8px;
+}
+
+.delete-admin-btn {
+  background: #f8d7da;
+  color: #dc3545;
+  border: none;
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.delete-admin-btn:hover {
+  background: #dc3545;
+  color: white;
+}
+
+.no-admins {
+  text-align: center;
+  color: #6c757d;
+  padding: 20px;
+  font-style: italic;
+}
+
+.loading-indicator {
+  text-align: center;
+  color: #6c757d;
+  padding: 20px;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  border: 1px solid #e9ecef;
+}
+
+.modal-header h3 {
+  margin: 0 0 16px 0;
+  color: #2c3e50;
+}
+
+.modal-body {
+  margin-bottom: 24px;
+}
+
+.modal-body p {
+  margin: 0 0 12px 0;
+  color: #2c3e50;
+  line-height: 1.5;
+}
+
+.warning-text {
+  color: #dc3545 !important;
+  font-weight: 600;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.confirm-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 18px;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.confirm-delete-btn:hover {
+  background: #c82333;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(220, 53, 69, 0.35);
+}

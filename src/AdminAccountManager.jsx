@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { KeyRound, ShieldPlus, AlertCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react';
+import { KeyRound, ShieldPlus, AlertCircle, CheckCircle2, Eye, EyeOff, Trash2, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { db } from './firebase';
 import {
@@ -11,15 +11,21 @@ import {
   getDocs,
   query,
   where,
-  serverTimestamp
+  serverTimestamp,
+  deleteDoc
 } from 'firebase/firestore';
 
 const AdminAccountManager = () => {
   const navigate = useNavigate();
   const [session, setSession] = useState(null);
   const [currentAdmin, setCurrentAdmin] = useState(null);
+  const [admins, setAdmins] = useState([]);
+  const [loadingAdmins, setLoadingAdmins] = useState(true);
   const [passwordStatus, setPasswordStatus] = useState(null);
   const [adminStatus, setAdminStatus] = useState(null);
+  const [deleteStatus, setDeleteStatus] = useState(null);
+  const [adminToDelete, setAdminToDelete] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [changeForm, setChangeForm] = useState({
     oldPassword: '',
     newPassword: '',
@@ -100,6 +106,27 @@ const AdminAccountManager = () => {
 
     loadCurrentAdmin();
   }, [session]);
+
+  useEffect(() => {
+    loadAdmins();
+  }, []);
+
+  const loadAdmins = async () => {
+    try {
+      setLoadingAdmins(true);
+      const adminSnapshot = await getDocs(collection(db, 'admin'));
+      const adminList = adminSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setAdmins(adminList);
+    } catch (error) {
+      console.error('Failed to load admins', error);
+      setDeleteStatus({ type: 'error', message: 'Failed to load admin list.' });
+    } finally {
+      setLoadingAdmins(false);
+    }
+  };
 
   const handleChangePassword = async (event) => {
     event.preventDefault();
@@ -199,6 +226,8 @@ const AdminAccountManager = () => {
       });
       setAdminStatus({ type: 'success', message: `Admin "${username}" added successfully.` });
       setAddForm({ username: '', password: '', confirmPassword: '' });
+      // Reload admins list
+      loadAdmins();
     } catch (error) {
       console.error('Failed to add admin', error);
       setAdminStatus({ type: 'error', message: error.message || 'Could not create admin.' });
@@ -207,12 +236,41 @@ const AdminAccountManager = () => {
     }
   };
 
+  const handleDeleteAdmin = (admin) => {
+    setAdminToDelete(admin);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteAdmin = async () => {
+    if (!adminToDelete) return;
+
+    try {
+      setDeleteStatus(null);
+      await deleteDoc(doc(db, 'admin', adminToDelete.id));
+      setDeleteStatus({ type: 'success', message: `Admin "${adminToDelete.username}" removed successfully.` });
+      setShowDeleteConfirm(false);
+      setAdminToDelete(null);
+      // Reload admins list
+      loadAdmins();
+    } catch (error) {
+      console.error('Failed to delete admin', error);
+      setDeleteStatus({ type: 'error', message: 'Failed to remove admin. Please try again.' });
+      setShowDeleteConfirm(false);
+      setAdminToDelete(null);
+    }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteConfirm(false);
+    setAdminToDelete(null);
+  };
+
   return (
     <div className="admin-account-manager">
       <div className="section-header">
         <div>
           <h2>Admin Account Controls</h2>
-          <p>Update your credentials and create additional admin accounts safely.</p>
+          <p>Update your credentials and manage admin accounts.</p>
         </div>
       </div>
 
@@ -381,10 +439,81 @@ const AdminAccountManager = () => {
             </button>
           </form>
         </section>
+
+        {/* Admin List Section */}
+        <section className="account-section">
+          <header>
+            <User size={24} />
+            <div>
+              <h3>Manage Admins</h3>
+              <p>View and remove existing admin accounts.</p>
+            </div>
+          </header>
+
+          {deleteStatus && (
+            <div className={`status-banner ${deleteStatus.type}`}>
+              {deleteStatus.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+              <span>{deleteStatus.message}</span>
+            </div>
+          )}
+
+          {loadingAdmins ? (
+            <div className="loading-indicator">Loading admins...</div>
+          ) : (
+            <div className="admin-list">
+              {admins.length === 0 ? (
+                <p className="no-admins">No admins found.</p>
+              ) : (
+                admins.map((admin) => (
+                  <div key={admin.id} className="admin-item">
+                    <div className="admin-info">
+                      <User size={16} />
+                      <span className="admin-username">{admin.username}</span>
+                      {currentAdmin && admin.id === currentAdmin.id && (
+                        <span className="current-admin-tag">(You)</span>
+                      )}
+                    </div>
+                    {currentAdmin && admin.id !== currentAdmin.id && (
+                      <button
+                        className="delete-admin-btn"
+                        onClick={() => handleDeleteAdmin(admin)}
+                        title="Remove admin"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </section>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && adminToDelete && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h3>Confirm Admin Removal</h3>
+            </div>
+            <div className="modal-body">
+              <p>Are you sure you want to remove admin "<strong>{adminToDelete.username}</strong>"?</p>
+              <p className="warning-text">This action cannot be undone.</p>
+            </div>
+            <div className="modal-actions">
+              <button className="cancel-btn" onClick={cancelDelete}>
+                Cancel
+              </button>
+              <button className="confirm-delete-btn" onClick={confirmDeleteAdmin}>
+                Remove Admin
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default AdminAccountManager;
-
