@@ -95,7 +95,8 @@ try:
     if not firebase_admin._apps:
         if os.path.exists(service_account_path):
             # Use the credentials file to initialize Firebase Admin SDK
-            cred = credentials.Certificate(service_account_path)
+            from firebase_admin import credentials as fb_credentials
+            cred = fb_credentials.Certificate(service_account_path)
             firebase_admin_app = firebase_admin.initialize_app(cred)
             logger.info("Firebase Admin SDK initialized successfully")
         else:
