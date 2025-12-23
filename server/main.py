@@ -42,48 +42,30 @@ logger = logging.getLogger(__name__)
 # Initialize Firestore
 db_firestore = None
 try:
-    # Get Firebase service account path from environment variable
-    service_account_path = os.getenv("FIREBASE_KEY_PATH", os.path.join(os.path.dirname(__file__), "talkbuddy-ai-f7d6a-firebase-adminsdk-fbsvc-f8e7032147.json"))
-        
-    if os.path.exists(service_account_path):
-        # Load the service account credentials
-        with open(service_account_path, 'r') as f:
-            import json
-            service_account_info = json.load(f)
-            project_id = service_account_info.get('project_id')
-        
-        # Create credentials with a shorter refresh interval to avoid JWT issues
-        try:
-            from google.oauth2 import service_account
-            from google.cloud import firestore
-            
-            credentials = service_account.Credentials.from_service_account_file(
-                service_account_path,
-                scopes=["https://www.googleapis.com/auth/cloud-platform"]
-            )
-            db_firestore = firestore.Client(credentials=credentials, project=project_id)
-            logger.info(f"Firestore initialized successfully for project {project_id}")
-        except Exception as db_error:
-            logger.error(f"Failed to initialize Firestore with service account: {db_error}")
-            
-            # Try with default credentials (if running in Google Cloud environment)
-            try:
-                db_firestore = firestore.Client()
-                logger.info(f"Firestore initialized with default credentials")
-            except Exception as fallback_error:
-                logger.error(f"Failed to initialize Firestore with default credentials: {fallback_error}")
-                db_firestore = None
-    else:
-        logger.warning(f"Service account file not found at {service_account_path}")
-        
-        # Try with default credentials
-        try:
-            from google.cloud import firestore
-            db_firestore = firestore.Client()
-            logger.info(f"Firestore initialized with default credentials")
-        except Exception as e:
-            logger.error(f"Failed to initialize Firestore: {e}")
-            db_firestore = None
+    import json
+    
+    # Get Firebase credentials from environment variable (JSON string)
+    firebase_creds_json = os.getenv("FIREBASE_CREDENTIAL_JSON")
+    
+    if not firebase_creds_json:
+        raise ValueError("FIREBASE_CREDENTIAL_JSON environment variable is not set")
+    
+    # Parse credentials from environment variable
+    service_account_info = json.loads(firebase_creds_json)
+    project_id = service_account_info.get('project_id')
+    
+    logger.info("Firebase credentials loaded from FIREBASE_CREDENTIAL_JSON environment variable")
+    
+    # Create credentials
+    from google.oauth2 import service_account
+    from google.cloud import firestore
+    
+    credentials = service_account.Credentials.from_service_account_info(
+        service_account_info,
+        scopes=["https://www.googleapis.com/auth/cloud-platform"]
+    )
+    db_firestore = firestore.Client(credentials=credentials, project=project_id)
+    logger.info(f"Firestore initialized successfully for project {project_id}")
         
 except Exception as e:
     logger.error(f"Failed to initialize Firestore: {e}")
@@ -93,23 +75,18 @@ except Exception as e:
 firebase_admin_app = None
 try:
     if not firebase_admin._apps:
-        if os.path.exists(service_account_path):
-            # Use the credentials file to initialize Firebase Admin SDK
-            from firebase_admin import credentials as fb_credentials
-            cred = fb_credentials.Certificate(service_account_path)
-            firebase_admin_app = firebase_admin.initialize_app(cred)
-            logger.info("Firebase Admin SDK initialized successfully")
-        else:
-            logger.warning(f"Service account file not found at {service_account_path}, skipping Firebase Admin SDK initialization")
+        # Use the credentials dict to initialize Firebase Admin SDK
+        from firebase_admin import credentials as fb_credentials
+        cred = fb_credentials.Certificate(service_account_info)
+        firebase_admin_app = firebase_admin.initialize_app(cred)
+        logger.info("Firebase Admin SDK initialized successfully")
     else:
         # Use the existing app if already initialized
-        firebase_admin_app = list(firebase_admin._apps.values())[0]  # Get first app from values
+        firebase_admin_app = list(firebase_admin._apps.values())[0]
         logger.info("Firebase Admin SDK already initialized")
 except Exception as e:
     logger.error(f"Failed to initialize Firebase Admin SDK: {e}")
-    # Don't raise an exception, just log it since we can still use Firestore
-    # The auth deletion is optional - Firestore deletion will still work
-    firebase_admin_app = None  # Explicitly set to None to avoid issues
+    firebase_admin_app = None
 
 app = FastAPI(
     title="TalkBuddy AI API",
@@ -1231,12 +1208,13 @@ async def delete_user_account(uid: str) -> bool:
             return False
         
         # Load service account info for fresh client creation
-        service_account_path = os.getenv("FIREBASE_KEY_PATH", os.path.join(os.path.dirname(__file__), "talkbuddy-ai-f7d6a-firebase-adminsdk-fbsvc-f8e7032147.json"))
-        service_account_info = None
-        if os.path.exists(service_account_path):
-            with open(service_account_path, 'r') as f:
-                import json
-                service_account_info = json.load(f)
+        import json
+        firebase_creds_json = os.getenv("FIREBASE_CREDENTIAL_JSON")
+        
+        if not firebase_creds_json:
+            raise ValueError("FIREBASE_CREDENTIAL_JSON environment variable is not set")
+        
+        service_account_info = json.loads(firebase_creds_json)
         
         # Execute with timeout using a separate thread to avoid blocking
         import concurrent.futures
