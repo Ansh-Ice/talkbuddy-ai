@@ -19,6 +19,7 @@ import AdminCharts from './AdminCharts';
 import QuizManagement from './QuizManagement';
 import ManageOralQuestions from './ManageOralQuestions';
 import AdminAccountManager from './AdminAccountManager';
+import AdminFeedback from './AdminFeedback';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('reports');
@@ -195,6 +196,8 @@ const AdminDashboard = () => {
         return <ManageOralQuestions />;
       case 'adminAccounts':
         return <AdminAccountManager />;
+      case 'feedback':
+        return <AdminFeedback />;
       default:
         return <AdminReports data={adminData} loading={loading} />;
     }
@@ -206,6 +209,7 @@ const AdminDashboard = () => {
     { id: 'quiz', label: 'Quiz Management', icon: Settings },
     { id: 'oral', label: 'Manage Oral Questions', icon: Mic },
     { id: 'adminAccounts', label: 'Admin Controls', icon: UserPlus },
+    { id: 'feedback', label: 'Feedback Management', icon: FileText },
   ];
 
   if (loading) {
@@ -280,6 +284,7 @@ const AdminDashboard = () => {
               {activeTab === 'quiz' && 'Quiz Management'}
               {activeTab === 'oral' && 'Oral Questions'}
               {activeTab === 'adminAccounts' && 'Admin & Security'}
+              {activeTab === 'feedback' && 'Feedback Management'}
             </h1>
           </div>
 

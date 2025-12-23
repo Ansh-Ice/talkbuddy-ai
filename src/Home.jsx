@@ -4,6 +4,7 @@ import { auth, db } from './firebase';
 import { signOut } from 'firebase/auth';
 import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
 import ProfileSidebar from './ProfileSidebar';
+import FeedbackForm from './FeedbackForm';
 import { useAuthValidation, useSecureLogout } from './hooks/useAuthValidation';
 import { useNavigate } from "react-router-dom";
 // Add Chart.js imports
@@ -34,6 +35,7 @@ ChartJS.register(
 
 export default function Home({ user, userProfile }) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [voiceSessions, setVoiceSessions] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [quizHistory, setQuizHistory] = useState([]); // Add state for quiz history
@@ -139,6 +141,11 @@ export default function Home({ user, userProfile }) {
     } else {
       navigate('/auth');
     }
+  };
+
+  const handleFeedbackClick = (e) => {
+    e.preventDefault();
+    setIsFeedbackOpen(true);
   };
   const openRoutine = (routineId) => {
     if (user) {
@@ -284,7 +291,7 @@ export default function Home({ user, userProfile }) {
           <a href="#features" onClick={(e) => handleNavScroll(e, 'features')}>Features</a>
           <a href="#progress" onClick={(e) => handleNavScroll(e, 'progress')}>Progress</a>
           <a href="#profile" onClick={handleProfileClick}>Profile</a>
-          <a href="#settings" onClick={(e) => handleNavScroll(e, 'settings')}>Settings</a>
+          <a href="#" onClick={handleFeedbackClick}>Feedback</a>
           {user ? (
             <button className="logout" onClick={handleLogout}>Logout</button>
           ) : (
@@ -580,6 +587,40 @@ export default function Home({ user, userProfile }) {
           user={user} 
           isOpen={isProfileOpen} 
           onClose={() => setIsProfileOpen(false)} 
+        />
+      )}
+
+      {/* Feedback Form */}
+      {isFeedbackOpen && (
+        <FeedbackForm 
+          user={user} 
+          onClose={() => setIsFeedbackOpen(false)} 
+          onSuccess={(message) => {
+            // Create a simple toast notification
+            const toast = document.createElement('div');
+            toast.className = 'feedback-toast';
+            toast.textContent = message;
+            
+            // Add toast styles
+            toast.style.position = 'fixed';
+            toast.style.bottom = '20px';
+            toast.style.right = '20px';
+            toast.style.backgroundColor = '#10b981';
+            toast.style.color = 'white';
+            toast.style.padding = '12px 20px';
+            toast.style.borderRadius = '8px';
+            toast.style.zIndex = '1001';
+            toast.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+            toast.style.minWidth = '250px';
+            toast.style.textAlign = 'center';
+            
+            document.body.appendChild(toast);
+            
+            // Remove toast after 3 seconds
+            setTimeout(() => {
+              toast.remove();
+            }, 3000);
+          }}
         />
       )}
     </div>
