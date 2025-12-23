@@ -857,6 +857,34 @@ async def submit_quiz(request: QuizSubmissionRequest):
                     })
                     logger.info(f"User {request.user_id} promoted from {current_level} to {new_level}")
         
+        # Get user email and display name for sending results email
+        try:
+            user_ref = db_firestore.collection("users").document(request.user_id)
+            user_doc = user_ref.get()
+            if user_doc.exists:
+                user_data = user_doc.to_dict()
+                user_email = user_data.get("email", "")
+                display_name = user_data.get("displayName", "User")
+                
+                # Prepare quiz results data for email
+                quiz_results = {
+                    "percentage": request.percentage,
+                    "total_score": request.total_score,
+                    "max_score": request.total_score / (request.percentage / 100) if request.percentage > 0 else 0,
+                    "total_questions": len(request.responses),
+                    "promoted": promoted,
+                    "new_level": new_level if promoted else None,
+                    "assessment_level": current_level
+                }
+                
+                # Send quiz results email asynchronously
+                if user_email:
+                    # Send email in background without blocking the response
+                    send_quiz_results_email(user_email, display_name, quiz_results)
+        except Exception as email_error:
+            logger.warning(f"Could not send quiz results email: {str(email_error)}")
+            # Don't raise an exception, just log it - email sending is not critical to quiz submission
+        
         return {
             "success": True,
             "promoted": promoted,
@@ -1070,6 +1098,128 @@ def send_deletion_email(email: str, display_name: str, confirmation_url: str) ->
         
     except Exception as e:
         logger.error(f"Failed to send deletion email: {str(e)}")
+        return False
+
+def send_quiz_results_email(email: str, display_name: str, quiz_results: Dict[str, Any]) -> bool:
+    """Send quiz results email to user."""
+    try:
+        # Get email settings from environment variables
+        sender_email = os.getenv("EMAIL_USER", "talkbuddyai@gmail.com")
+        sender_password = os.getenv("EMAIL_PASSWORD")
+        
+        # Check if required environment variables are set
+        if not sender_password:
+            logger.error("EMAIL_PASSWORD not set in environment")
+            return False
+            
+        if not sender_email:
+            logger.error("EMAIL_USER not set in environment")
+            return False
+        
+        # Create message
+        msg = MIMEMultipart('alternative')
+        msg['From'] = sender_email
+        msg['To'] = email
+        msg['Subject'] = "Your Quiz Results - TalkBuddy AI"
+        
+        # Extract quiz data
+        percentage = quiz_results.get('percentage', 0)
+        total_score = quiz_results.get('total_score', 0)
+        max_score = quiz_results.get('max_score', 0)
+        total_questions = quiz_results.get('total_questions', 0)
+        promoted = quiz_results.get('promoted', False)
+        new_level = quiz_results.get('new_level', '')
+        assessment_level = quiz_results.get('assessment_level', 'BASIC')
+        
+        # Determine performance message
+        if percentage >= 80:
+            performance = "Excellent! 🌟"
+        elif percentage >= 60:
+            performance = "Good! 👍"
+        elif percentage >= 40:
+            performance = "Keep practicing! 💪"
+        else:
+            performance = "Don't give up! You can do better! 🚀"
+        
+        # Plain text version
+        text_body = f"""
+Hello {display_name},
+
+Your quiz has been completed! Here are your results:
+
+QUIZ RESULTS
+============
+Level: {assessment_level}
+Performance: {performance}
+Score: {percentage}% ({total_score}/{max_score} points)
+Questions Answered: {total_questions}
+
+"""
+        
+        if promoted:
+            text_body += f"""LEVEL PROMOTION! 🎉
+Congratulations! You've been promoted to {new_level} level!
+
+"""
+        
+        text_body += """Keep practicing to improve your English skills!
+
+Best regards,
+TalkBuddy AI Team
+        """
+        
+        # HTML version
+        html_body = f"""
+<html>
+  <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <h1 style="color: #4CAF50; margin: 0;">🎯 Quiz Results</h1>
+        <p style="color: #666; margin-top: 5px;">Your performance on TalkBuddy AI</p>
+      </div>
+      
+      <div style="background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <h2 style="color: #333; margin-top: 0;">Hello {display_name},</h2>
+        <p>Your quiz has been completed! Here are your results:</p>
+        
+        <div style="background-color: #f0f7ff; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0;">
+          <p style="margin: 5px 0;"><strong>Assessment Level:</strong> {assessment_level}</p>
+          <p style="margin: 5px 0;"><strong>Performance:</strong> {performance}</p>
+          <p style="margin: 5px 0;"><strong>Score:</strong> <span style="font-size: 24px; font-weight: bold; color: #4CAF50;">{percentage}%</span></p>
+          <p style="margin: 5px 0;"><strong>Points Earned:</strong> {total_score}/{max_score}</p>
+          <p style="margin: 5px 0;"><strong>Questions Answered:</strong> {total_questions}</p>
+        </div>
+        
+        {f'<div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; text-align: center;"><h3 style="color: #856404; margin: 0;">🎉 Congratulations!</h3><p style="margin: 10px 0; color: #856404;">You\'ve been promoted to <strong>{new_level}</strong> level!</p></div>' if promoted else ''}
+        
+        <p style="margin-top: 20px; color: #666;">Keep practicing to improve your English skills!</p>
+        
+        <p style="margin-top: 20px; text-align: center; color: #999; font-size: 12px;">
+          © 2025 TalkBuddy AI. All rights reserved.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
+        """
+        
+        # Attach both plain text and HTML versions
+        msg.attach(MIMEText(text_body, 'plain'))
+        msg.attach(MIMEText(html_body, 'html'))
+        
+        # Connect to server and send email
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        text = msg.as_string()
+        server.sendmail(sender_email, email, text)
+        server.quit()
+        
+        logger.info(f"Quiz results email sent to {email}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to send quiz results email: {str(e)}")
         return False
 
 async def delete_user_account(uid: str) -> bool:
