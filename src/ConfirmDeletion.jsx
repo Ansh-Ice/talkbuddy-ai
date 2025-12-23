@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { doc, getDoc, deleteDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { db } from "./firebase";
 
 export default function ConfirmDeletion() {
@@ -69,21 +69,21 @@ export default function ConfirmDeletion() {
     setError("");
 
     try {
-      // Delete user's chat history
-      const chatHistoryRef = collection(db, "chatHistory");
-      const q = query(chatHistoryRef, where("userId", "==", uid));
-      const querySnapshot = await getDocs(q);
+      // Call backend to confirm deletion and delete all user data
+      const response = await fetch(`http://localhost:8000/confirm-deletion?token=${token}&uid=${uid}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to confirm account deletion');
+      }
+
+      const result = await response.json();
       
-      const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
-      await Promise.all(deletePromises);
-
-      // Delete user's registration record
-      const emailKey = deletionData.email.trim().toLowerCase();
-      await deleteDoc(doc(db, "registeredEmails", emailKey));
-
-      // Update deletion request status
-      await deleteDoc(doc(db, "deletionRequests", uid));
-
       setSuccess("Account has been successfully deleted. All your data has been permanently removed.");
       
       // Redirect to home page after 3 seconds
@@ -181,4 +181,3 @@ export default function ConfirmDeletion() {
     </div>
   );
 }
-

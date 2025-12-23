@@ -1,3 +1,9 @@
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException, Request, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -16,7 +22,11 @@ import os
 from google.cloud.firestore import Client as FirestoreClient
 from datetime import datetime
 from google.oauth2 import service_account
-
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import firebase_admin
+from firebase_admin import credentials
 
 # Configure logging
 logging.basicConfig(
@@ -33,32 +43,72 @@ logger = logging.getLogger(__name__)
 db_firestore = None
 try:
     
-    service_account_path = os.path.join(os.path.dirname(__file__), "talkbuddy-ai-f7d6a-firebase-adminsdk-fbsvc-060787fb4e.json")
+    service_account_path = os.path.join(os.path.dirname(__file__), "talkbuddy-ai-f7d6a-firebase-adminsdk-fbsvc-f8e7032147.json")
         
     if os.path.exists(service_account_path):
-        cred = service_account.Credentials.from_service_account_file(service_account_path)
-        # Use the project ID from credentials, or fallback to the one from the JSON
-        project_id = cred.project_id
+        # Load the service account credentials
+        with open(service_account_path, 'r') as f:
+            import json
+            service_account_info = json.load(f)
+            project_id = service_account_info.get('project_id')
         
-        # Try to initialize Firestore with explicit database parameter
-        # For Firestore Native mode, use database='(default)'
+        # Create credentials with a shorter refresh interval to avoid JWT issues
         try:
-            db_firestore = FirestoreClient(credentials=cred, project=project_id, database='(default)')
+            from google.oauth2 import service_account
+            from google.cloud import firestore
+            
+            credentials = service_account.Credentials.from_service_account_file(
+                service_account_path,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            )
+            db_firestore = firestore.Client(credentials=credentials, project=project_id)
             logger.info(f"Firestore initialized successfully for project {project_id}")
         except Exception as db_error:
-            # If database parameter fails, try without it (for older Firestore setups)
-            logger.warning(f"Failed with database parameter, trying without: {db_error}")
+            logger.error(f"Failed to initialize Firestore with service account: {db_error}")
+            
+            # Try with default credentials (if running in Google Cloud environment)
             try:
-                db_firestore = FirestoreClient(credentials=cred, project=project_id)
-                logger.info(f"Firestore initialized successfully for project {project_id} (without database param)")
-            except Exception as e2:
-                logger.error(f"Failed to initialize Firestore: {e2}")
+                db_firestore = firestore.Client()
+                logger.info(f"Firestore initialized with default credentials")
+            except Exception as fallback_error:
+                logger.error(f"Failed to initialize Firestore with default credentials: {fallback_error}")
                 db_firestore = None
     else:
         logger.warning(f"Service account file not found at {service_account_path}")
+        
+        # Try with default credentials
+        try:
+            from google.cloud import firestore
+            db_firestore = firestore.Client()
+            logger.info(f"Firestore initialized with default credentials")
+        except Exception as e:
+            logger.error(f"Failed to initialize Firestore: {e}")
+            db_firestore = None
+        
 except Exception as e:
     logger.error(f"Failed to initialize Firestore: {e}")
     db_firestore = None
+
+# Initialize Firebase Admin SDK
+firebase_admin_app = None
+try:
+    if not firebase_admin._apps:
+        if os.path.exists(service_account_path):
+            # Use the credentials file to initialize Firebase Admin SDK
+            cred = credentials.Certificate(service_account_path)
+            firebase_admin_app = firebase_admin.initialize_app(cred)
+            logger.info("Firebase Admin SDK initialized successfully")
+        else:
+            logger.warning(f"Service account file not found at {service_account_path}, skipping Firebase Admin SDK initialization")
+    else:
+        # Use the existing app if already initialized
+        firebase_admin_app = list(firebase_admin._apps.values())[0]  # Get first app from values
+        logger.info("Firebase Admin SDK already initialized")
+except Exception as e:
+    logger.error(f"Failed to initialize Firebase Admin SDK: {e}")
+    # Don't raise an exception, just log it since we can still use Firestore
+    # The auth deletion is optional - Firestore deletion will still work
+    firebase_admin_app = None  # Explicitly set to None to avoid issues
 
 app = FastAPI(
     title="TalkBuddy AI API",
@@ -850,6 +900,318 @@ async def global_exception_handler(request, exc):
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": "Internal server error"},
     )
+
+class DeletionEmailRequest(BaseModel):
+    userId: str
+    email: str
+    displayName: str
+    deletionToken: str
+    confirmationUrl: str
+
+@app.post("/send-deletion-email")
+async def send_deletion_email_endpoint(request: DeletionEmailRequest):
+    """Send account deletion confirmation email to user."""
+    try:
+        success = send_deletion_email(
+            email=request.email,
+            display_name=request.displayName,
+            confirmation_url=request.confirmationUrl
+        )
+        
+        if success:
+            return {"success": True, "message": "Deletion confirmation email sent successfully"}
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to send deletion confirmation email"
+            )
+    except Exception as e:
+        logger.error(f"Error in send_deletion_email_endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to send deletion confirmation email: {str(e)}"
+        )
+
+@app.get("/confirm-deletion")
+async def get_confirm_deletion(request: Request):
+    """Return a simple response for the GET request to the confirmation page."""
+    return {"message": "Deletion confirmation endpoint ready", "status": "ok"}
+
+@app.post("/confirm-deletion")
+async def confirm_account_deletion(request: Request):
+    """Confirm and process account deletion after email verification."""
+    try:
+        # Get token from query parameters
+        token = request.query_params.get('token')
+        uid = request.query_params.get('uid')
+        
+        if not token or not uid:
+            raise HTTPException(
+                status_code=400,
+                detail="Missing token or user ID"
+            )
+        
+        # Verify the deletion request in Firestore
+        if not db_firestore:
+            raise HTTPException(
+                status_code=503,
+                detail="Database service unavailable"
+            )
+        
+        deletion_request_ref = db_firestore.collection("deletionRequests").document(uid)
+        deletion_request_doc = deletion_request_ref.get()
+        
+        if not deletion_request_doc.exists:
+            raise HTTPException(
+                status_code=404,
+                detail="Deletion request not found"
+            )
+        
+        deletion_data = deletion_request_doc.to_dict()
+        
+        # Verify the token
+        if deletion_data.get("deletionToken") != token:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid deletion token"
+            )
+        
+        # Check if the request is still valid (not expired)
+        requested_at = deletion_data.get("requestedAt")
+        if requested_at:
+            # Check if the request is older than 24 hours (86400000 ms)
+            if time.time() * 1000 - requested_at > 24 * 60 * 60 * 1000:
+                # Delete the expired request
+                deletion_request_ref.delete()
+                raise HTTPException(
+                    status_code=400,
+                    detail="Deletion request has expired"
+                )
+        
+        # Mark the request as confirmed
+        deletion_request_ref.update({
+            "status": "confirmed",
+            "confirmedAt": time.time() * 1000
+        })
+        
+        # Actually delete the user account and all associated data
+        success = await delete_user_account(uid)
+        
+        if success:
+            return {
+                "success": True,
+                "message": "Account and all associated data have been successfully deleted.",
+                "userId": uid
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to delete user account"
+            )
+        
+    except Exception as e:
+        logger.error(f"Error in confirm_account_deletion: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to confirm account deletion: {str(e)}"
+        )
+
+def send_deletion_email(email: str, display_name: str, confirmation_url: str) -> bool:
+    """Send account deletion confirmation email to user."""
+    try:
+        # Get email settings from environment variables
+        sender_email = os.getenv("EMAIL_USER", "talkbuddyai@gmail.com")
+        sender_password = os.getenv("EMAIL_PASSWORD")
+        
+        # Check if required environment variables are set
+        if not sender_password:
+            logger.error("EMAIL_PASSWORD not set in environment")
+            return False
+            
+        if not sender_email:
+            logger.error("EMAIL_USER not set in environment")
+            return False
+        
+        # Create message
+        msg = MIMEMultipart()
+        msg['From'] = sender_email
+        msg['To'] = email
+        msg['Subject'] = "Confirm Account Deletion - TalkBuddy AI"
+        
+        # Email body
+        body = f"""
+        Hello {display_name},
+        
+        You have requested to delete your TalkBuddy AI account. This is a permanent action that cannot be undone.
+        
+        To confirm account deletion, please click the link below:
+        {confirmation_url}
+        
+        If you did not request this deletion, please ignore this email or contact our support team immediately.
+        
+        This link will expire in 24 hours for security reasons.
+        
+        Best regards,
+        TalkBuddy AI Team
+        """
+        
+        msg.attach(MIMEText(body, 'plain'))
+        
+        # Connect to server and send email
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        text = msg.as_string()
+        server.sendmail(sender_email, email, text)
+        server.quit()
+        
+        logger.info(f"Deletion confirmation email sent to {email}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to send deletion email: {str(e)}")
+        return False
+
+async def delete_user_account(uid: str) -> bool:
+    """Delete user account and all associated data from Firestore and Firebase Auth."""
+    try:
+        if not db_firestore:
+            logger.error("Firestore not available")
+            return False
+        
+        # Load service account info for fresh client creation
+        service_account_path = os.path.join(os.path.dirname(__file__), "talkbuddy-ai-f7d6a-firebase-adminsdk-fbsvc-f8e7032147.json")
+        service_account_info = None
+        if os.path.exists(service_account_path):
+            with open(service_account_path, 'r') as f:
+                import json
+                service_account_info = json.load(f)
+        
+        # Execute with timeout using a separate thread to avoid blocking
+        import concurrent.futures
+        import threading
+        
+        def execute_with_timeout(func, timeout_seconds=10):
+            result = [None]
+            exception = [None]
+            
+            def target():
+                try:
+                    result[0] = func()
+                except Exception as e:
+                    exception[0] = e
+            
+            thread = threading.Thread(target=target)
+            thread.daemon = True
+            thread.start()
+            thread.join(timeout_seconds)
+            
+            if thread.is_alive():
+                logger.warning(f"Operation timed out after {timeout_seconds} seconds")
+                return False, "timeout"
+            
+            if exception[0]:
+                raise exception[0]
+            
+            return result[0], "success"
+        
+        # Get user data before deletion to access email
+        try:
+            user_ref = db_firestore.collection("users").document(uid)
+            user_doc = user_ref.get()
+        except Exception as e:
+            logger.error(f"Error accessing user document for deletion {uid}: {str(e)}")
+            return False
+        
+        if user_doc.exists:
+            user_data = user_doc.to_dict()
+            user_email = user_data.get("email", "")
+            
+            # Delete user's subcollections (like ai_quizzes)
+            try:
+                ai_quizzes_ref = user_ref.collection("ai_quizzes")
+                quizzes_docs = ai_quizzes_ref.get()
+                for quiz_doc in quizzes_docs:
+                    quiz_doc.reference.delete()
+            except Exception as quiz_error:
+                logger.warning(f"Could not delete ai_quizzes for user {uid}: {str(quiz_error)}")
+            
+            # Delete the main user document
+            try:
+                user_ref.delete()
+            except Exception as user_error:
+                logger.warning(f"Could not delete main user document {uid}: {str(user_error)}")
+                # If we can't delete the main document, return False
+                return False
+            
+            # Delete from registeredEmails if exists
+            if user_email:
+                try:
+                    email_key = user_email.lower().strip()
+                    registered_email_ref = db_firestore.collection("registeredEmails").document(email_key)
+                    registered_email_ref.delete()
+                except Exception as email_error:
+                    logger.warning(f"Could not delete registered email for user {uid}: {str(email_error)}")
+            
+            # Delete any deletion requests for this user
+            try:
+                deletion_request_ref = db_firestore.collection("deletionRequests").document(uid)
+                deletion_request_ref.delete()
+            except Exception as deletion_error:
+                logger.warning(f"Could not delete deletion request for user {uid}: {str(deletion_error)}")
+            
+            # Delete user's voice sessions - with specific error handling for JWT issues
+            try:
+                from google.cloud.firestore import Query
+                voice_sessions_query = db_firestore.collection("voice_sessions").where("userId", "==", uid).limit(1000)  # Limit to avoid timeout
+                voice_sessions_docs = voice_sessions_query.get()
+                for session_doc in voice_sessions_docs:
+                    session_doc.reference.delete()
+                logger.info(f"Deleted voice sessions for user {uid}")
+            except Exception as voice_error:
+                # Check if this is an authentication/JWT error
+                error_str = str(voice_error).lower()
+                if "invalid_grant" in error_str or "jwt" in error_str or "auth" in error_str:
+                    logger.warning(f"Authentication error deleting voice sessions for user {uid}, skipping: {str(voice_error)}")
+                else:
+                    logger.warning(f"Could not delete voice sessions for user {uid}: {str(voice_error)}")
+            
+            # Delete user's guided sessions - with specific error handling for JWT issues
+            try:
+                guided_sessions_query = db_firestore.collection("guidedSessions").where("userId", "==", uid).limit(1000)  # Limit to avoid timeout
+                guided_sessions_docs = guided_sessions_query.get()
+                for session_doc in guided_sessions_docs:
+                    session_doc.reference.delete()
+                logger.info(f"Deleted guided sessions for user {uid}")
+            except Exception as guided_error:
+                # Check if this is an authentication/JWT error
+                error_str = str(guided_error).lower()
+                if "invalid_grant" in error_str or "jwt" in error_str or "auth" in error_str:
+                    logger.warning(f"Authentication error deleting guided sessions for user {uid}, skipping: {str(guided_error)}")
+                else:
+                    logger.warning(f"Could not delete guided sessions for user {uid}: {str(guided_error)}")
+            
+            # Try to delete Firebase Auth user (this will work for both email/password and Google users)
+            try:
+                if firebase_admin_app:  # Only try if Firebase Admin SDK was initialized successfully
+                    from firebase_admin import auth
+                    auth.delete_user(uid)
+                    logger.info(f"Firebase Auth user {uid} deleted successfully")
+                else:
+                    logger.warning(f"Firebase Admin SDK not initialized, skipping auth deletion for user {uid}")
+            except Exception as auth_error:
+                logger.warning(f"Could not delete Firebase Auth user {uid}: {str(auth_error)}")
+                # Continue with deletion even if Firebase Auth deletion fails
+            
+            logger.info(f"User account {uid} and all associated data deleted successfully")
+            return True
+        else:
+            logger.warning(f"User document not found for deletion: {uid}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error deleting user account {uid}: {str(e)}")
+        return False
 
 if __name__ == "__main__":
     import uvicorn

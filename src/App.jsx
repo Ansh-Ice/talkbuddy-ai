@@ -179,7 +179,7 @@ function App() {
     }
 
     if (!user) {
-      if (currentPath !== '/auth') {
+      if (currentPath !== '/auth' && currentPath !== '/confirm-deletion') {
         console.log("No user → redirecting to /auth")
         navigate('/auth', { replace: true })
       }
