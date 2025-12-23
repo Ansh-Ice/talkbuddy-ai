@@ -42,8 +42,8 @@ logger = logging.getLogger(__name__)
 # Initialize Firestore
 db_firestore = None
 try:
-    
-    service_account_path = os.path.join(os.path.dirname(__file__), "talkbuddy-ai-f7d6a-firebase-adminsdk-fbsvc-f8e7032147.json")
+    # Get Firebase service account path from environment variable
+    service_account_path = os.getenv("FIREBASE_KEY_PATH", os.path.join(os.path.dirname(__file__), "talkbuddy-ai-f7d6a-firebase-adminsdk-fbsvc-f8e7032147.json"))
         
     if os.path.exists(service_account_path):
         # Load the service account credentials
@@ -1230,7 +1230,7 @@ async def delete_user_account(uid: str) -> bool:
             return False
         
         # Load service account info for fresh client creation
-        service_account_path = os.path.join(os.path.dirname(__file__), "talkbuddy-ai-f7d6a-firebase-adminsdk-fbsvc-f8e7032147.json")
+        service_account_path = os.getenv("FIREBASE_KEY_PATH", os.path.join(os.path.dirname(__file__), "talkbuddy-ai-f7d6a-firebase-adminsdk-fbsvc-f8e7032147.json"))
         service_account_info = None
         if os.path.exists(service_account_path):
             with open(service_account_path, 'r') as f:
