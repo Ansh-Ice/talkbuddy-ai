@@ -146,12 +146,6 @@ function AIQuiz({ user, userProfile }) {
     try {
       const data = await api.generateAssessment(user.uid);
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ detail: "Failed to generate quiz" }));
-        throw new Error(errorData.detail || "Failed to generate assessment");
-      }
-
-      const data = await res.json();
       if (data.questions && data.quiz_id) {
         setQuestions(data.questions);
         setQuizId(data.quiz_id);
