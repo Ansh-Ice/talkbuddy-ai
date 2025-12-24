@@ -260,41 +260,61 @@ class QuizSubmissionRequest(BaseModel):
     percentage: float
 
 # Service to manage Ollama connections
+# NOTE: This class uses lazy initialization to avoid blocking app startup.
+# ChatOllama is only instantiated when first requested via get_model().
 class OllamaService:
-    _instance = None
     _model = None
+    _model_lock = None
     _last_error = None
     _retry_after = 0
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._initialize_model()
-        return cls._instance
+    _initialization_attempted = False
 
     @classmethod
     def _initialize_model(cls):
+        """Initialize ChatOllama without blocking. Called only when model is first needed."""
+        if cls._initialization_attempted:
+            # Already tried initialization, don't retry immediately
+            if cls._last_error and time.time() < cls._retry_after:
+                return
+        
+        cls._initialization_attempted = True
+        
         try:
             # Get Ollama base URL from environment, default to localhost if not set
             ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
             
+            logger.info(f"Initializing Ollama model with base_url: {ollama_base_url}")
+            
+            # Initialize ChatOllama with strict timeout to prevent hanging
+            # Note: ChatOllama initialization should not block; it only stores config
             cls._model = ChatOllama(
                 model="llama3.1",
                 base_url=ollama_base_url,
                 temperature=0.7,
                 num_ctx=2048,
-                timeout=120
+                timeout=30  # Reduced from 120 to fail faster if service unreachable
             )
             cls._last_error = None
             logger.info(f"Ollama model initialized successfully with base_url: {ollama_base_url}")
         except Exception as e:
             cls._model = None
             cls._last_error = str(e)
-            logger.error(f"Failed to initialize Ollama model: {e}")
+            # Set retry time: wait 10 seconds before retrying
+            cls._retry_after = time.time() + 10
+            logger.error(f"Failed to initialize Ollama model (will retry in 10s): {e}")
 
     @classmethod
     async def get_model(cls):
-        if cls._model is None or (cls._last_error and time.time() > cls._retry_after):
+        """Get or initialize the ChatOllama model lazily (only when first called)."""
+        # Check if we should retry initialization
+        if cls._model is None:
+            if cls._last_error and time.time() < cls._retry_after:
+                # Still within retry backoff period
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="AI service is temporarily unavailable. Please try again in a moment."
+                )
+            # Attempt initialization (either first time or retry)
             cls._initialize_model()
         
         if cls._model is None:
