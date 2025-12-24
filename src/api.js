@@ -4,15 +4,23 @@
  * Falls back to localhost:8000 for development if not set
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+let API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
+// Ensure API_BASE_URL does not have a trailing slash
+API_BASE_URL = API_BASE_URL.replace(/\/$/, '');
 
 console.log('API Base URL:', API_BASE_URL);
 
 /**
  * Generic fetch wrapper with error handling
+ * Safely constructs URLs by ensuring endpoint starts with /
  */
 async function fetchAPI(endpoint, options = {}) {
-  const url = `${API_BASE_URL}${endpoint}`;
+  // Ensure endpoint starts with /
+  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const url = `${API_BASE_URL}${normalizedEndpoint}`;
+  
+  console.debug(`[API] ${options.method || 'GET'} ${url}`);
   
   try {
     const response = await fetch(url, {
@@ -39,7 +47,7 @@ async function fetchAPI(endpoint, options = {}) {
 
     return data;
   } catch (error) {
-    console.error(`API Error [${endpoint}]:`, error.message);
+    console.error(`API Error [${normalizedEndpoint}]:`, error.message);
     throw error;
   }
 }
@@ -84,30 +92,12 @@ export const evaluateOralResponse = (userId, questionId, userResponse, questionT
 // ==================== Account Deletion APIs ====================
 
 export const confirmAccountDeletion = (token, uid) => {
-  const url = `${API_BASE_URL}/confirm-deletion?token=${encodeURIComponent(token)}&uid=${encodeURIComponent(uid)}`;
-  return fetch(url, {
+  const endpoint = `/confirm-deletion?token=${encodeURIComponent(token)}&uid=${encodeURIComponent(uid)}`;
+  return fetchAPI(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-  }).then(async (response) => {
-    const contentType = response.headers.get('content-type');
-    let data;
-    
-    if (contentType && contentType.includes('application/json')) {
-      data = await response.json();
-    } else {
-      data = await response.text();
-    }
-
-    if (!response.ok) {
-      throw new Error(data.detail || `HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    return data;
-  }).catch((error) => {
-    console.error('API Error [/confirm-deletion]:', error.message);
-    throw error;
   });
 };
 

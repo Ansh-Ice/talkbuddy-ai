@@ -71,20 +71,7 @@ export default function ConfirmDeletion() {
 
     try {
       // Call backend to confirm deletion and delete all user data
-      const response = await api.confirmAccountDeletion(token, uid).then(data => ({
-        ok: true,
-        json: async () => data
-      })).catch(error => ({
-        ok: false,
-        json: async () => ({ detail: error.message })
-      }));
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to confirm deletion');
-      }
-
-      const result = await response.json();
+      const result = await api.confirmAccountDeletion(token, uid);
       
       setSuccess("Account has been successfully deleted. All your data has been permanently removed.");
       
