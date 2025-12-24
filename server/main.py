@@ -333,6 +333,26 @@ async def health_check():
             "timestamp": time.time()
         }
 
+async def check_firestore_accessible() -> bool:
+    """
+    Perform a real health check on Firestore by attempting a simple read operation.
+    This is more reliable than just checking if db_firestore exists.
+    """
+    if db_firestore is None:
+        logger.error("Firestore client is None - initialization failed")
+        return False
+    
+    try:
+        # Attempt a simple read to verify Firestore is accessible
+        # This will reveal permission errors, network issues, quota exceeded, etc.
+        test_doc = db_firestore.collection("_health").document("_test").get()
+        logger.debug("Firestore health check passed")
+        return True
+    except Exception as e:
+        logger.error(f"Firestore health check failed: {str(e)}", exc_info=True)
+        return False
+
+
 async def check_ollama_running() -> bool:
     """Check if Ollama service is running and responding."""
     try:
@@ -545,8 +565,10 @@ async def evaluate_oral_response(request: QuizEvaluationRequest):
 
 async def get_user_assessment_level(user_id: str) -> str:
     """Fetch user's assessment level from Firestore using document ID."""
-    if not db_firestore:
-        logger.warning("Firestore not available, defaulting to BASIC")
+    # Check Firestore accessibility with actual read operation
+    firestore_ok = await check_firestore_accessible()
+    if not firestore_ok:
+        logger.warning("Firestore not accessible, defaulting to BASIC")
         return "BASIC"
     
     try:
@@ -567,12 +589,8 @@ async def get_user_assessment_level(user_id: str) -> str:
             logger.warning(f"User {user_id} not found in Firestore, defaulting to BASIC")
             return "BASIC"
     except Exception as e:
-        error_msg = str(e)
-        # Check if it's a database not found error
-        if "does not exist" in error_msg or "404" in error_msg:
-            logger.error(f"Firestore database not found. Please ensure Firestore is set up in your Google Cloud project. Error: {e}")
-        else:
-            logger.error(f"Error fetching user level: {e}")
+        # Log the full traceback to see the actual error
+        logger.error(f"Error fetching user level for {user_id}: {str(e)}", exc_info=True)
         return "BASIC"
 
 
@@ -702,10 +720,13 @@ Generate exactly 3 multiple-choice and 5 oral questions. Return only the JSON ar
 async def generate_assessment(request: GenerateAssessmentRequest):
     """Generate an AI-powered quiz based on user's assessment level."""
     try:
-        if not db_firestore:
+        # Perform real Firestore health check
+        firestore_ok = await check_firestore_accessible()
+        if not firestore_ok:
+            logger.error("Firestore is not accessible - cannot generate assessment")
             raise HTTPException(
                 status_code=503,
-                detail="Database service unavailable"
+                detail="Database service unavailable. Please try again later."
             )
         
         # Get user's assessment level
@@ -786,10 +807,13 @@ async def generate_assessment(request: GenerateAssessmentRequest):
 async def submit_quiz(request: QuizSubmissionRequest):
     """Submit quiz results and check for level promotion."""
     try:
-        if not db_firestore:
+        # Perform real Firestore health check
+        firestore_ok = await check_firestore_accessible()
+        if not firestore_ok:
+            logger.error("Firestore is not accessible - cannot submit quiz")
             raise HTTPException(
                 status_code=503,
-                detail="Database service unavailable"
+                detail="Database service unavailable. Please try again later."
             )
         
         # Get current user level
@@ -975,10 +999,12 @@ async def confirm_account_deletion(request: Request):
             )
         
         # Verify the deletion request in Firestore
-        if not db_firestore:
+        firestore_ok = await check_firestore_accessible()
+        if not firestore_ok:
+            logger.error("Firestore is not accessible - cannot confirm deletion")
             raise HTTPException(
                 status_code=503,
-                detail="Database service unavailable"
+                detail="Database service unavailable. Please try again later."
             )
         
         deletion_request_ref = db_firestore.collection("deletionRequests").document(uid)
@@ -1220,8 +1246,10 @@ TalkBuddy AI Team
 async def delete_user_account(uid: str) -> bool:
     """Delete user account and all associated data from Firestore and Firebase Auth."""
     try:
-        if not db_firestore:
-            logger.error("Firestore not available")
+        # Perform real Firestore health check
+        firestore_ok = await check_firestore_accessible()
+        if not firestore_ok:
+            logger.error("Firestore is not accessible - cannot delete user account")
             return False
         
         # Load service account info for fresh client creation
