@@ -18,8 +18,6 @@ import time
 import aiohttp
 from functools import lru_cache
 import re
-import os
-from google.cloud.firestore import Client as FirestoreClient
 from datetime import datetime
 from google.oauth2 import service_account
 import smtplib
@@ -27,6 +25,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import firebase_admin
 from firebase_admin import credentials
+from firebase_admin import firestore as fb_firestore
 
 # Configure logging
 logging.basicConfig(
@@ -39,11 +38,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize Firestore
+# Global Firestore client - initialized once at startup
 db_firestore = None
+firebase_admin_app = None
+service_account_info = None
+
+# Initialize Firebase Admin SDK and Firestore
 try:
-    import json
-    
     # Get Firebase credentials from environment variable (JSON string)
     firebase_creds_json = os.getenv("FIREBASE_CREDENTIAL_JSON")
     
@@ -56,36 +57,24 @@ try:
     
     logger.info("Firebase credentials loaded from FIREBASE_CREDENTIAL_JSON environment variable")
     
-    # Create credentials
-    from google.oauth2 import service_account
-    from google.cloud import firestore
-    
-    credentials = service_account.Credentials.from_service_account_info(
-        service_account_info,
-        scopes=["https://www.googleapis.com/auth/cloud-platform"]
-    )
-    db_firestore = firestore.Client(credentials=credentials, project=project_id)
-    logger.info(f"Firestore initialized successfully for project {project_id}")
-        
-except Exception as e:
-    logger.error(f"Failed to initialize Firestore: {e}")
-    db_firestore = None
-
-# Initialize Firebase Admin SDK
-firebase_admin_app = None
-try:
+    # Initialize Firebase Admin SDK first
     if not firebase_admin._apps:
-        # Use the credentials dict to initialize Firebase Admin SDK
         from firebase_admin import credentials as fb_credentials
         cred = fb_credentials.Certificate(service_account_info)
         firebase_admin_app = firebase_admin.initialize_app(cred)
         logger.info("Firebase Admin SDK initialized successfully")
     else:
-        # Use the existing app if already initialized
         firebase_admin_app = list(firebase_admin._apps.values())[0]
         logger.info("Firebase Admin SDK already initialized")
+    
+    # Get Firestore client from the initialized Firebase Admin SDK
+    # This ensures we use the same credentials and project
+    db_firestore = fb_firestore.client()
+    logger.info(f"Firestore client obtained successfully for project {project_id}")
+        
 except Exception as e:
-    logger.error(f"Failed to initialize Firebase Admin SDK: {e}")
+    logger.error(f"Failed to initialize Firebase: {e}", exc_info=True)
+    db_firestore = None
     firebase_admin_app = None
 
 app = FastAPI(
@@ -260,37 +249,61 @@ class QuizSubmissionRequest(BaseModel):
     percentage: float
 
 # Service to manage Ollama connections
+# NOTE: This class uses lazy initialization to avoid blocking app startup.
+# ChatOllama is only instantiated when first requested via get_model().
 class OllamaService:
-    _instance = None
     _model = None
+    _model_lock = None
     _last_error = None
     _retry_after = 0
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._initialize_model()
-        return cls._instance
+    _initialization_attempted = False
 
     @classmethod
     def _initialize_model(cls):
+        """Initialize ChatOllama without blocking. Called only when model is first needed."""
+        if cls._initialization_attempted:
+            # Already tried initialization, don't retry immediately
+            if cls._last_error and time.time() < cls._retry_after:
+                return
+        
+        cls._initialization_attempted = True
+        
         try:
+            # Get Ollama base URL from environment, default to localhost if not set
+            ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+            
+            logger.info(f"Initializing Ollama model with base_url: {ollama_base_url}")
+            
+            # Initialize ChatOllama with strict timeout to prevent hanging
+            # Note: ChatOllama initialization should not block; it only stores config
             cls._model = ChatOllama(
                 model="llama3.1",
+                base_url=ollama_base_url,
                 temperature=0.7,
                 num_ctx=2048,
-                timeout=120
+                timeout=30  # Reduced from 120 to fail faster if service unreachable
             )
             cls._last_error = None
-            logger.info("Ollama model initialized successfully")
+            logger.info(f"Ollama model initialized successfully with base_url: {ollama_base_url}")
         except Exception as e:
             cls._model = None
             cls._last_error = str(e)
-            logger.error(f"Failed to initialize Ollama model: {e}")
+            # Set retry time: wait 10 seconds before retrying
+            cls._retry_after = time.time() + 10
+            logger.error(f"Failed to initialize Ollama model (will retry in 10s): {e}")
 
     @classmethod
     async def get_model(cls):
-        if cls._model is None or (cls._last_error and time.time() > cls._retry_after):
+        """Get or initialize the ChatOllama model lazily (only when first called)."""
+        # Check if we should retry initialization
+        if cls._model is None:
+            if cls._last_error and time.time() < cls._retry_after:
+                # Still within retry backoff period
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="AI service is temporarily unavailable. Please try again in a moment."
+                )
+            # Attempt initialization (either first time or retry)
             cls._initialize_model()
         
         if cls._model is None:
@@ -320,11 +333,35 @@ async def health_check():
             "timestamp": time.time()
         }
 
+async def check_firestore_accessible() -> bool:
+    """
+    Perform a real health check on Firestore by attempting a simple read operation.
+    This is more reliable than just checking if db_firestore exists.
+    """
+    if db_firestore is None:
+        logger.error("Firestore client is None - initialization failed")
+        return False
+    
+    try:
+        # Attempt a simple read to verify Firestore is accessible
+        # This will reveal permission errors, network issues, quota exceeded, etc.
+        test_doc = db_firestore.collection("_health").document("_test").get()
+        logger.debug("Firestore health check passed")
+        return True
+    except Exception as e:
+        logger.error(f"Firestore health check failed: {str(e)}", exc_info=True)
+        return False
+
+
 async def check_ollama_running() -> bool:
     """Check if Ollama service is running and responding."""
     try:
+        # Get Ollama base URL from environment, default to localhost if not set
+        ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        check_url = f"{ollama_base_url}/api/tags"
+        
         async with aiohttp.ClientSession() as session:
-            async with session.get('http://localhost:11434/api/tags', timeout=5) as response:
+            async with session.get(check_url, timeout=5) as response:
                 return response.status == 200
     except Exception as e:
         logger.warning(f"Ollama check failed: {str(e)}")
@@ -528,8 +565,10 @@ async def evaluate_oral_response(request: QuizEvaluationRequest):
 
 async def get_user_assessment_level(user_id: str) -> str:
     """Fetch user's assessment level from Firestore using document ID."""
-    if not db_firestore:
-        logger.warning("Firestore not available, defaulting to BASIC")
+    # Check Firestore accessibility with actual read operation
+    firestore_ok = await check_firestore_accessible()
+    if not firestore_ok:
+        logger.warning("Firestore not accessible, defaulting to BASIC")
         return "BASIC"
     
     try:
@@ -550,12 +589,8 @@ async def get_user_assessment_level(user_id: str) -> str:
             logger.warning(f"User {user_id} not found in Firestore, defaulting to BASIC")
             return "BASIC"
     except Exception as e:
-        error_msg = str(e)
-        # Check if it's a database not found error
-        if "does not exist" in error_msg or "404" in error_msg:
-            logger.error(f"Firestore database not found. Please ensure Firestore is set up in your Google Cloud project. Error: {e}")
-        else:
-            logger.error(f"Error fetching user level: {e}")
+        # Log the full traceback to see the actual error
+        logger.error(f"Error fetching user level for {user_id}: {str(e)}", exc_info=True)
         return "BASIC"
 
 
@@ -685,10 +720,13 @@ Generate exactly 3 multiple-choice and 5 oral questions. Return only the JSON ar
 async def generate_assessment(request: GenerateAssessmentRequest):
     """Generate an AI-powered quiz based on user's assessment level."""
     try:
-        if not db_firestore:
+        # Perform real Firestore health check
+        firestore_ok = await check_firestore_accessible()
+        if not firestore_ok:
+            logger.error("Firestore is not accessible - cannot generate assessment")
             raise HTTPException(
                 status_code=503,
-                detail="Database service unavailable"
+                detail="Database service unavailable. Please try again later."
             )
         
         # Get user's assessment level
@@ -769,10 +807,13 @@ async def generate_assessment(request: GenerateAssessmentRequest):
 async def submit_quiz(request: QuizSubmissionRequest):
     """Submit quiz results and check for level promotion."""
     try:
-        if not db_firestore:
+        # Perform real Firestore health check
+        firestore_ok = await check_firestore_accessible()
+        if not firestore_ok:
+            logger.error("Firestore is not accessible - cannot submit quiz")
             raise HTTPException(
                 status_code=503,
-                detail="Database service unavailable"
+                detail="Database service unavailable. Please try again later."
             )
         
         # Get current user level
@@ -958,10 +999,12 @@ async def confirm_account_deletion(request: Request):
             )
         
         # Verify the deletion request in Firestore
-        if not db_firestore:
+        firestore_ok = await check_firestore_accessible()
+        if not firestore_ok:
+            logger.error("Firestore is not accessible - cannot confirm deletion")
             raise HTTPException(
                 status_code=503,
-                detail="Database service unavailable"
+                detail="Database service unavailable. Please try again later."
             )
         
         deletion_request_ref = db_firestore.collection("deletionRequests").document(uid)
@@ -1203,8 +1246,10 @@ TalkBuddy AI Team
 async def delete_user_account(uid: str) -> bool:
     """Delete user account and all associated data from Firestore and Firebase Auth."""
     try:
-        if not db_firestore:
-            logger.error("Firestore not available")
+        # Perform real Firestore health check
+        firestore_ok = await check_firestore_accessible()
+        if not firestore_ok:
+            logger.error("Firestore is not accessible - cannot delete user account")
             return False
         
         # Load service account info for fresh client creation

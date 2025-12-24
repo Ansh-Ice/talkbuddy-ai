@@ -7,6 +7,7 @@ import {
 } from "firebase/auth";
 import { doc, getDoc, setDoc, deleteDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { auth, db } from "./firebase";
+import * as api from "./api";
 
 export default function ProfileSidebar({ user, isOpen, onClose }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -107,23 +108,13 @@ const handleChangePassword = async () => {
       });
 
       // Send email via backend API
-      const emailResponse = await fetch('http://localhost:8000/send-deletion-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: user.uid,
-          email: user.email,
-          displayName: user.displayName || "User",
-          deletionToken: deletionToken,
-          confirmationUrl: confirmationUrl
-        })
-      });
-
-      if (!emailResponse.ok) {
-        throw new Error('Failed to send deletion email');
-      }
+      await api.sendDeletionEmail(
+        user.uid,
+        user.email,
+        user.displayName || "User",
+        deletionToken,
+        confirmationUrl
+      );
 
       setSuccess("Account deletion confirmation email sent! You will be logged out in 3 seconds. Please check your email and follow the link to confirm account deletion.");
       
