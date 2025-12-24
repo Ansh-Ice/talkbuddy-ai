@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { db } from "./firebase";
 import { doc, getDoc } from "firebase/firestore";
+import * as api from "./api";
 import "./AIQuiz.css";
 import "./OralQuestion.css";
 
@@ -143,13 +144,7 @@ function AIQuiz({ user, userProfile }) {
     setError(null);
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/generate_assessment/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: user.uid,
-        }),
-      });
+      const data = await api.generateAssessment(user.uid);
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ detail: "Failed to generate quiz" }));
@@ -217,24 +212,12 @@ function AIQuiz({ user, userProfile }) {
       const currentQuestion = questions[currentIndex];
       
       // Call evaluation API
-      const response = await fetch('http://localhost:8000/api/oral-quiz/evaluate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: user?.uid || 'anonymous',
-          questionId: currentQuestion.id,
-          questionText: currentQuestion.question,
-          userResponse: transcript
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Evaluation failed: ${response.status}`);
-      }
-
-      const evaluationResult = await response.json();
+      const evaluationResult = await api.evaluateOralResponse(
+        user?.uid || 'anonymous',
+        currentQuestion.id,
+        transcript,
+        currentQuestion.question
+      );
       const normalizedScore = Math.max(1, Math.min(10, Number(evaluationResult.score) || 5));
       
       const evalData = {
@@ -358,24 +341,14 @@ function AIQuiz({ user, userProfile }) {
       const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
 
       // Submit to backend
-      const res = await fetch("http://127.0.0.1:8000/submit_quiz/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: user.uid,
-          quiz_id: quizId,
-          responses: responses,
-          scores: scores,
-          total_score: totalScore,
-          percentage: percentage
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to submit quiz");
-      }
-
-      const data = await res.json();
+      const data = await api.submitQuiz(
+        user.uid,
+        quizId,
+        responses,
+        scores,
+        totalScore,
+        percentage
+      );
 
       const resultPayload = {
         quizId,

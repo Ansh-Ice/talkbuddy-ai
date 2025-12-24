@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 import { Canvas } from '@react-three/fiber';
 import Avatar3D from './components/Avatar3D';
+import * as api from './api';
 import './VideoCall.css';
 
 const wasmAssetsPath = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm';
@@ -22,7 +23,7 @@ const moodPalette = {
   neutral: defaultMood,
 };
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+
 const SILENCE_DELAY = 3000; // 3 seconds of silence to send message
 const MAX_RECORDING_TIME = 60000; // 1 minute max recording time
 
@@ -457,22 +458,12 @@ const VideoCall = () => {
     setIsProcessing(true);
 
     try {
-      const response = await fetch(`${API_BASE}/voice_chat/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [{ role: "user", content: text }],
-          user_name: "User",
-        }),
-        signal: abortControllerRef.current.signal
-      });
+      const response = await api.voiceChat(
+        [{ role: "user", content: text }],
+        "User"
+      );
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || "The AI coach could not respond right now.");
-      }
-
-      const data = await response.json();
+      const data = response;
       const replyText = data.reply || "I'm having trouble responding at the moment.";
       
       const aiMessage = { 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, getDocs, addDoc, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "./firebase";
+import * as api from "./api";
 import "./OralQuestion.css";
 
 const MAX_SCORE_PER_QUESTION = 10;
@@ -203,26 +204,14 @@ function OralQuestion({ user, userProfile, refreshUserProfile }) {
       
       // Call LLaMA API for evaluation
       console.log('Sending request to LLaMA API...');
-      const response = await fetch('http://localhost:8000/api/oral-quiz/evaluate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: user?.uid || 'anonymous',
-          questionId: currentQuestion.id,
-          questionText: currentQuestion.prompt,
-          userResponse: transcript
-        })
-      });
+      const evaluationResult = await api.evaluateOralResponse(
+        user?.uid || 'anonymous',
+        currentQuestion.id,
+        transcript,
+        currentQuestion.prompt
+      );
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('LLaMA API error:', errorText);
-        throw new Error(`Server responded with status ${response.status}`);
-      }
-
-      const evaluationResult = await response.json();
+      // If we got here, evaluation succeeded
       console.log('Evaluation result:', evaluationResult);
 
       // Validate the response structure
