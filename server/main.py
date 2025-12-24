@@ -18,8 +18,6 @@ import time
 import aiohttp
 from functools import lru_cache
 import re
-import os
-from google.cloud.firestore import Client as FirestoreClient
 from datetime import datetime
 from google.oauth2 import service_account
 import smtplib
@@ -27,6 +25,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import firebase_admin
 from firebase_admin import credentials
+from firebase_admin import firestore as fb_firestore
 
 # Configure logging
 logging.basicConfig(
@@ -39,11 +38,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize Firestore
+# Global Firestore client - initialized once at startup
 db_firestore = None
+firebase_admin_app = None
+service_account_info = None
+
+# Initialize Firebase Admin SDK and Firestore
 try:
-    import json
-    
     # Get Firebase credentials from environment variable (JSON string)
     firebase_creds_json = os.getenv("FIREBASE_CREDENTIAL_JSON")
     
@@ -56,36 +57,24 @@ try:
     
     logger.info("Firebase credentials loaded from FIREBASE_CREDENTIAL_JSON environment variable")
     
-    # Create credentials
-    from google.oauth2 import service_account
-    from google.cloud import firestore
-    
-    credentials = service_account.Credentials.from_service_account_info(
-        service_account_info,
-        scopes=["https://www.googleapis.com/auth/cloud-platform"]
-    )
-    db_firestore = firestore.Client(credentials=credentials, project=project_id)
-    logger.info(f"Firestore initialized successfully for project {project_id}")
-        
-except Exception as e:
-    logger.error(f"Failed to initialize Firestore: {e}")
-    db_firestore = None
-
-# Initialize Firebase Admin SDK
-firebase_admin_app = None
-try:
+    # Initialize Firebase Admin SDK first
     if not firebase_admin._apps:
-        # Use the credentials dict to initialize Firebase Admin SDK
         from firebase_admin import credentials as fb_credentials
         cred = fb_credentials.Certificate(service_account_info)
         firebase_admin_app = firebase_admin.initialize_app(cred)
         logger.info("Firebase Admin SDK initialized successfully")
     else:
-        # Use the existing app if already initialized
         firebase_admin_app = list(firebase_admin._apps.values())[0]
         logger.info("Firebase Admin SDK already initialized")
+    
+    # Get Firestore client from the initialized Firebase Admin SDK
+    # This ensures we use the same credentials and project
+    db_firestore = fb_firestore.client()
+    logger.info(f"Firestore client obtained successfully for project {project_id}")
+        
 except Exception as e:
-    logger.error(f"Failed to initialize Firebase Admin SDK: {e}")
+    logger.error(f"Failed to initialize Firebase: {e}", exc_info=True)
+    db_firestore = None
     firebase_admin_app = None
 
 app = FastAPI(
