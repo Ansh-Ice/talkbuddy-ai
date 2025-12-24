@@ -275,14 +275,18 @@ class OllamaService:
     @classmethod
     def _initialize_model(cls):
         try:
+            # Get Ollama base URL from environment, default to localhost if not set
+            ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+            
             cls._model = ChatOllama(
                 model="llama3.1",
+                base_url=ollama_base_url,
                 temperature=0.7,
                 num_ctx=2048,
                 timeout=120
             )
             cls._last_error = None
-            logger.info("Ollama model initialized successfully")
+            logger.info(f"Ollama model initialized successfully with base_url: {ollama_base_url}")
         except Exception as e:
             cls._model = None
             cls._last_error = str(e)
@@ -323,8 +327,12 @@ async def health_check():
 async def check_ollama_running() -> bool:
     """Check if Ollama service is running and responding."""
     try:
+        # Get Ollama base URL from environment, default to localhost if not set
+        ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        check_url = f"{ollama_base_url}/api/tags"
+        
         async with aiohttp.ClientSession() as session:
-            async with session.get('http://localhost:11434/api/tags', timeout=5) as response:
+            async with session.get(check_url, timeout=5) as response:
                 return response.status == 200
     except Exception as e:
         logger.warning(f"Ollama check failed: {str(e)}")
