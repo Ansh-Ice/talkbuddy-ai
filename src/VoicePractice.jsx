@@ -3,9 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Loader2, Mic, MicOff, RotateCcw, Volume2 } from "lucide-react";
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from "firebase/firestore";
 import { db } from "./firebase";
+import * as api from "./api";
 import "./VoicePractice.css";
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 const SILENCE_DELAY = 3000; // 3 seconds of silence to send message
 const MAX_RECORDING_TIME = 60000; // 1 minute max recording time
 
@@ -494,22 +494,14 @@ const VoicePractice = ({ user }) => {
       }
 
       // Call evaluation endpoint
-      const response = await fetch(`${API_BASE}/api/oral-quiz/evaluate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: user?.uid || "anonymous",
-          questionId: "voice_practice_session",
-          userResponse: conversationText,
-          questionText: "Voice practice session evaluation"
-        })
-      });
+      const evaluationResult = await api.evaluateOralResponse(
+        user?.uid || "anonymous",
+        "voice_practice_session",
+        conversationText,
+        "Voice practice session evaluation"
+      );
 
-      if (!response.ok) {
-        throw new Error("Failed to generate summary");
-      }
-
-      const evaluation = await response.json();
+      const evaluation = evaluationResult;
       
       const summary = {
         mistakes: evaluation.corrections || [],
@@ -577,22 +569,11 @@ const VoicePractice = ({ user }) => {
     abortControllerRef.current = new AbortController();
 
     try {
-      const response = await fetch(`${API_BASE}/voice_chat/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [{ role: "user", content: text }],
-          user_name: user?.displayName || user?.email || undefined,
-        }),
-        signal: abortControllerRef.current.signal
-      });
+      const data = await api.voiceChat(
+        [{ role: "user", content: text }],
+        user?.displayName || user?.email || undefined
+      );
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || "The AI coach could not respond right now.");
-      }
-
-      const data = await response.json();
       const replyText = data.reply || "I'm having trouble responding at the moment.";
       
       const aiMessage = { 

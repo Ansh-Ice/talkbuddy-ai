@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "./firebase";
+import * as api from "./api";
 
 export default function ConfirmDeletion() {
   const [searchParams] = useSearchParams();
@@ -70,19 +71,7 @@ export default function ConfirmDeletion() {
 
     try {
       // Call backend to confirm deletion and delete all user data
-      const response = await fetch(`http://localhost:8000/confirm-deletion?token=${token}&uid=${uid}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to confirm account deletion');
-      }
-
-      const result = await response.json();
+      const result = await api.confirmAccountDeletion(token, uid);
       
       setSuccess("Account has been successfully deleted. All your data has been permanently removed.");
       
